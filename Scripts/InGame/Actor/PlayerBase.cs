@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Fusion;
+using Fusion.Sockets;
 
 public class PlayerBase : NetworkBehaviour
 {
@@ -11,7 +13,9 @@ public class PlayerBase : NetworkBehaviour
 
     [HideInInspector] public PlayerCar playerCar = null;
     [HideInInspector] public PlayerCharacter playerCharacter = null;
- 
+
+    public PlayerRef playerRef;
+
     protected virtual void Awake()
     {
         player = gameObject;
@@ -22,16 +26,24 @@ public class PlayerBase : NetworkBehaviour
         playerCharacter = gameObject.GetComponentInChildren<PlayerCharacter>();
     }
 
-    public int PlayerID
+    public NetworkId networkPlayerID
     {
-        get { return Id.Behaviour; }
+        get 
+        {
+            if (networkObject != null)
+                return networkObject.Id;
+            else 
+                return new NetworkId(); 
+        }
     }
 
 
     public NetworkObject networkObject
     {
-        get { return Object; }
+        get 
+        { 
+            return
+                Object; 
+        }
     }
-
-
 }

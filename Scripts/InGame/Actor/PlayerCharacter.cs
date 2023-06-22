@@ -1,86 +1,64 @@
+using PNIX.ReferenceTable;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 public class PlayerCharacter : MonoBehaviour
 {
     #region ANIMATION PARAMETERS
-    public const string ANIM_CHARACTER_01_IDLE = "ANIM_CHARACTER_01_IDLE";
-    public const string ANIM_CHARACTER_01_DRIVE = "ANIM_CHARACTER_01_DRIVE";
-    public const string ANIM_CHARACTER_01_LEFT = "ANIM_CHARACTER_01_LEFT";
-    public const string ANIM_CHARACTER_01_RIGHT = "ANIM_CHARACTER_01_RIGHT";
-    public const string ANIM_CHARACTER_01_BOOSTER_1 = "ANIM_CHARACTER_01_BOOSTER_1";
-    public const string ANIM_CHARACTER_01_BOOSTER_2 = "ANIM_CHARACTER_01_BOOSTER_2";
-    public const string ANIM_CHARACTER_01_BRAKE = "ANIM_CHARACTER_01_BRAKE";
-    public const string ANIM_CHARACTER_01_FLIP = "ANIM_CHARACTER_01_FLIP";
-    public const string ANIM_CHARACTER_01_VICTORY = "ANIM_CHARACTER_01_VICTORY";
-    public const string ANIM_CHARACTER_01_COMPLETE = "ANIM_CHARACTER_01_COMPLETE";
-    public const string ANIM_CHARACTER_01_RETIRE = "ANIM_CHARACTER_01_RETIRE";
-    public const string ANIM_CHARACTER_01_SPIN = "ANIM_CHARACTER_01_SPIN";
+    public const string ANIM_CHARACTER_IDLE = "ANIM_CHARACTER_IDLE";
+    public const string ANIM_CHARACTER_DRIVE = "ANIM_CHARACTER_DRIVE";
+    public const string ANIM_CHARACTER_LEFT = "ANIM_CHARACTER_LEFT";
+    public const string ANIM_CHARACTER_RIGHT = "ANIM_CHARACTER_RIGHT";
+    public const string ANIM_CHARACTER_BOOSTER_1 = "ANIM_CHARACTER_BOOSTER_1";
+    public const string ANIM_CHARACTER_BOOSTER_2 = "ANIM_CHARACTER_BOOSTER_2";
+    public const string ANIM_CHARACTER_BRAKE = "ANIM_CHARACTER_BRAKE";
+    public const string ANIM_CHARACTER_FLIP = "ANIM_CHARACTER_FLIP";
+    public const string ANIM_CHARACTER_VICTORY = "ANIM_CHARACTER_VICTORY";
+    public const string ANIM_CHARACTER_COMPLETE = "ANIM_CHARACTER_COMPLETE";
+    public const string ANIM_CHARACTER_RETIRE = "ANIM_CHARACTER_RETIRE";
+    public const string ANIM_CHARACTER_SPIN = "ANIM_CHARACTER_SPIN";
 
     #endregion
-    [System.Serializable]
-    public class Character
+
+    [SerializeField] public List<PlayerCharacter_Prefab> CharacterList = new List<PlayerCharacter_Prefab>();
+    [ReadOnly] public PlayerCharacter_Prefab currentCharacter = null;
+
+    public void SetCharacter(CRefCharacter refChar)
     {
-        public DataManager.CHARACTER_DATA.CharacterType characterType;
-        public GameObject go = null;
-        public Animator animator = null;
-        public Transform headPosition = null;
-    }
+        foreach (var i in CharacterList)
+            Destroy(i.gameObject);
+        CharacterList.Clear();
 
-    [SerializeField] public List<Character> CharacterList = new List<Character>();
-    [ReadOnly] public Character currentCharacter = new Character();
+        var prefabID = refChar.prefabID;
 
-    //TEMP
-    [SerializeField] public List<GameObject> headObj = new List<GameObject>();
 
-    public void SetCharacter(DataManager.CHARACTER_DATA.CharacterType type)
-    {
-        var c = CharacterList.Find(x => x.characterType.Equals(type));
-        if (c != null)
+
+        var asset = AssetManager.Instance.loadedPrefabAssets.Find(x => x.prefab != null && x.prefab.name.Contains(prefabID));
+        if (asset != null)
         {
-            currentCharacter = c;
+#if UNITY_EDITOR
+            GameObject asssetGo = (GameObject)AssetDatabase.LoadAssetAtPath("Assets/DownloadAsset/Character/" + asset.prefab.name + ".prefab", typeof(GameObject));
+            var go = Instantiate(asssetGo, this.transform);
+#else
+            var go = Instantiate(asset.prefab, this.transform);
+#endif
 
-            foreach (var i in CharacterList)
-            {
-                if (i.go.Equals(currentCharacter.go))
-                    i.go.SafeSetActive(true);
-                else
-                    i.go.SafeSetActive(false);
-            }
+
+            go.transform.localScale = Vector3.one;
+            var script = go.GetComponent<PlayerCharacter_Prefab>();
+            CharacterList.Add(script);
+            currentCharacter = script;
         }
 
-        foreach (var i in headObj)
+        if (currentCharacter != null)
         {
-            i.SafeSetActive(false);
+            currentCharacter.dataInfo = refChar;
+            currentCharacter.SetMaterial();
+            currentCharacter.go.gameObject.SafeSetActive(true);
         }
     }
-
-    public void SetHeadObj(int id)
-    {
-        //TEMP TEMP!!!!!!!!!!
-        if (headObj != null && headObj.Count > 0)
-        {
-            int equipIndex = id;
-
-            for (int i = 0; i < headObj.Count; i++)
-            {
-                if (equipIndex == i && equipIndex >= 0 && equipIndex < headObj.Count)
-                {
-                    headObj[i].SafeSetActive(true);
-                    if (currentCharacter != null & currentCharacter.headPosition != null)
-                        headObj[i].transform.parent = currentCharacter.headPosition;
-                }
-                else
-                {
-                    headObj[i].SafeSetActive(false);
-                }
-            }
-
-        }
-    }
-
-
 
     public string GetString_ANIM_IDLE()
     {
@@ -88,21 +66,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_IDLE;
-                    break;
-                case DataManager.CHARACTER_DATA.CharacterType.Two:
-                    
-                    break;
-                case DataManager.CHARACTER_DATA.CharacterType.Three:
-                    
-                    break;
-                case DataManager.CHARACTER_DATA.CharacterType.Four:
-                    
-                    break;
-            }
+            animName = ANIM_CHARACTER_IDLE;
         }
 
         return animName;
@@ -114,12 +78,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_DRIVE;
-                    break;
-            }
+            animName = ANIM_CHARACTER_DRIVE;
         }
 
         return animName;
@@ -131,12 +90,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_LEFT;
-                    break;
-            }
+            animName = ANIM_CHARACTER_LEFT;
         }
 
         return animName;
@@ -148,12 +102,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_RIGHT;
-                    break;
-            }
+            animName = ANIM_CHARACTER_RIGHT;
         }
 
         return animName;
@@ -165,12 +114,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_BOOSTER_1;
-                    break;
-            }
+            animName = ANIM_CHARACTER_BOOSTER_1;
         }
 
         return animName;
@@ -182,12 +126,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_BOOSTER_2;
-                    break;
-            }
+            animName = ANIM_CHARACTER_BOOSTER_2;
         }
 
         return animName;
@@ -199,12 +138,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_BRAKE;
-                    break;
-            }
+            animName = ANIM_CHARACTER_BRAKE;
         }
 
         return animName;
@@ -217,12 +151,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_FLIP;
-                    break;
-            }
+            animName = ANIM_CHARACTER_FLIP;
         }
 
         return animName;
@@ -234,12 +163,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_VICTORY;
-                    break;
-            }
+            animName = ANIM_CHARACTER_VICTORY;
         }
 
         return animName;
@@ -251,12 +175,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_COMPLETE;
-                    break;
-            }
+            animName = ANIM_CHARACTER_COMPLETE;
         }
 
         return animName;
@@ -268,12 +187,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_RETIRE;
-                    break;
-            }
+            animName = ANIM_CHARACTER_RETIRE;
         }
 
         return animName;
@@ -285,12 +199,7 @@ public class PlayerCharacter : MonoBehaviour
 
         if (currentCharacter != null)
         {
-            switch (currentCharacter.characterType)
-            {
-                case DataManager.CHARACTER_DATA.CharacterType.One:
-                    animName = ANIM_CHARACTER_01_SPIN;
-                    break;
-            }
+            animName = ANIM_CHARACTER_SPIN;
         }
 
         return animName;

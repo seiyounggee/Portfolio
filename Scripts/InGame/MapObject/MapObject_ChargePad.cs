@@ -16,14 +16,21 @@ public class MapObject_ChargePad : MonoBehaviour
     [SerializeField] MeshRenderer mesh = null;
     [SerializeField] Material m1, m2, m3;
 
-    public float CHARGEPAD_LV2_CHARGE_RESET_TIME = 5f;
-    public float CHARGEPAD_LV3_CHARGE_RESET_TIME = 3f;
+    [ReadOnly] public bool isOn = true;
 
-    public float CHARGEPAD_LV1_ANIM_SPEED = 1f;
-    public float CHARGEPAD_LV2_ANIM_SPEED = 1.2f;
-    public float CHARGEPAD_LV3_ANIM_SPEED = 1.5f;
+    #region Charge Pad Data
+    [ReadOnly] public float CHARGEPAD_LV2_CHARGE_RESET_TIME = 5f;
+    [ReadOnly] public float CHARGEPAD_LV3_CHARGE_RESET_TIME = 3f;
+
+    [ReadOnly] public float CHARGEPAD_LV1_ANIM_SPEED = 1f;
+    [ReadOnly] public float CHARGEPAD_LV2_ANIM_SPEED = 1.2f;
+    [ReadOnly] public float CHARGEPAD_LV3_ANIM_SPEED = 1.5f;
+    #endregion
 
     public const string ANIM_SPEED = "ANIM_SPEED";
+
+    [ReadOnly] public int nearestWayPointIndex = -1;
+    [ReadOnly] public PlayerMovement.LaneType nearestWayPointLaneType = PlayerMovement.LaneType.None;
 
     public NetworkInGameRPCManager networkInGameRPCManager => PhotonNetworkManager.Instance.MyNetworkInGameRPCManager;
 
@@ -39,13 +46,10 @@ public class MapObject_ChargePad : MonoBehaviour
 
     public void OnEnable()
     {
-        DataManager.Instance.firebaseBasicValueChangedCallback += OnFirebaseBasicValueChangedCallback;
     }
 
     public void OnDisable()
     {
-
-        DataManager.Instance.firebaseBasicValueChangedCallback -= OnFirebaseBasicValueChangedCallback;
     }
 
     public void SetData(int id)
@@ -54,28 +58,14 @@ public class MapObject_ChargePad : MonoBehaviour
         currentLevel = ChargePadLevel.One;
         SetMat();
 
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.chargePadData != null)
-        {
-            CHARGEPAD_LV2_CHARGE_RESET_TIME = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV2_CHARGE_RESET_TIME;
-            CHARGEPAD_LV3_CHARGE_RESET_TIME = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV3_CHARGE_RESET_TIME;
-            CHARGEPAD_LV1_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV1_ANIM_SPEED;
-            CHARGEPAD_LV2_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV2_ANIM_SPEED;
-            CHARGEPAD_LV3_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV3_ANIM_SPEED;
-        }
+        CHARGEPAD_LV2_CHARGE_RESET_TIME = DataManager.Instance.GetGameConfig<float>("chargePadLv2ResetTime");
+        CHARGEPAD_LV3_CHARGE_RESET_TIME = DataManager.Instance.GetGameConfig<float>("chargePadLv3ResetTime");
+        CHARGEPAD_LV1_ANIM_SPEED = 1;
+        CHARGEPAD_LV2_ANIM_SPEED = 2;
+        CHARGEPAD_LV3_ANIM_SPEED = 3;
 
         SetAnim();
-    }
-
-    public void SetData()
-    {
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.chargePadData != null)
-        {
-            CHARGEPAD_LV2_CHARGE_RESET_TIME = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV2_CHARGE_RESET_TIME;
-            CHARGEPAD_LV3_CHARGE_RESET_TIME = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV3_CHARGE_RESET_TIME;
-            CHARGEPAD_LV1_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV1_ANIM_SPEED;
-            CHARGEPAD_LV2_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV2_ANIM_SPEED;
-            CHARGEPAD_LV3_ANIM_SPEED = DataManager.Instance.basicData.chargePadData.CHARGEPAD_LV3_ANIM_SPEED;
-        }
+        SetNearestWaypointIndexAndLane();
     }
 
     [ReadOnly] public float timer = 0f;
@@ -192,6 +182,41 @@ public class MapObject_ChargePad : MonoBehaviour
         }
     }
 
+    private void SetNearestWaypointIndexAndLane()
+    {
+        if (InGameManager.Instance.wayPoints == null)
+        {
+            Debug.Log("InGameManager.Instance.wayPoints is null");
+            return;
+        }
+
+        if (InGameManager.Instance.wayPoints.allWaypoints == null)
+        {
+            Debug.Log("allWaypoints is null");
+            return;
+        }
+
+        var wp = InGameManager.Instance.wayPoints.allWaypoints;
+        if (wp != null)
+        {
+            var minDist = float.MaxValue;
+
+            foreach (var list in wp)
+            {
+                foreach (var way in list)
+                {
+                    float dist = Vector3.Distance(way.GetPosition(), this.transform.position);
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        nearestWayPointIndex = way.index;
+                        nearestWayPointLaneType = (PlayerMovement.LaneType)way.laneNumber;
+                    }
+                }
+            }
+        }
+    }
+
     private void Event_OnTriggerEnter(Collider other)
     {
         if (IsBlockEvent())
@@ -209,11 +234,8 @@ public class MapObject_ChargePad : MonoBehaviour
                 if (pm.isFlipped || pm.isOutOfBoundary)
                     return;
 
-                if (pm.isEnteredTheFinishLine)
-                    return;
-
                 if (pm.IsMine)
-                    networkInGameRPCManager.RPC_SetChargePad(id, (int)currentLevel, false, pm.PlayerID);
+                    networkInGameRPCManager.RPC_SetChargePad(id, (int)currentLevel, false, pm.networkPlayerID);
             }
         }
     }
@@ -236,20 +258,25 @@ public class MapObject_ChargePad : MonoBehaviour
 
     private bool IsBlockEvent()
     {
-        if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+        if (id == -1)
             return true;
 
-        if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-        || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
-        || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
-        || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
-            return true;
+        if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGame
+            || PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameResult)
+        {
+            if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
+                || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
+                || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown)
+                return true;
+            else
+                return false;
+        }
         else
-            return false;
+            return true;
+
     }
 
-    private void OnFirebaseBasicValueChangedCallback()
+    private void FirebaseBasicValueChanged_SubscriptionEvent()
     {
-        SetData();
     }
 }

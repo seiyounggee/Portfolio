@@ -8,9 +8,27 @@ namespace WayPointSystem
     {
         public PositionConstraint XYZConstraint = PositionConstraint.XYZ;
 
+        [HideInInspector]
+        public List<List<Waypoint>> allWaypoints
+        {
+            get
+            {
+                var all = new List<List<Waypoint>>();
+                if (waypoints_0 != null) all.Add(waypoints_0);
+                if (waypoints_1 != null) all.Add(waypoints_1);
+                if (waypoints_2 != null) all.Add(waypoints_2);
+                if (waypoints_3 != null) all.Add(waypoints_3);
+                if (waypoints_4 != null) all.Add(waypoints_4);
+                if (waypoints_5 != null) all.Add(waypoints_5);
+                if (waypoints_6 != null) all.Add(waypoints_6);
+
+                return all;
+            }
+        }
+
         [HideInInspector] public List<Waypoint> waypoints_0;
 
-        [HideInInspector] public List<Waypoint> waypoints_1;   // The waypoint components controlled by this WaypointsGroupl IMMEDIATE children only
+        [HideInInspector] public List<Waypoint> waypoints_1;
 
         [HideInInspector] public List<Waypoint> waypoints_2;
 
@@ -65,6 +83,8 @@ namespace WayPointSystem
                 foreach (Waypoint wp in waypoints_6)
                     wp.SetWaypointGroup(this);
             }
+        
+            transform.position = Vector3.zero;
         }
 
         /// <summary>
@@ -178,8 +198,55 @@ namespace WayPointSystem
             return waypoints_6;
         }
 
+        public void AddWaypoint(Waypoint wp, int index, int laneIndex)
+        {
+            foreach (var laneList in allWaypoints)
+            {
+                foreach (var waypoint in laneList)
+                {
+                    if (waypoint.laneNumber == laneIndex && laneIndex != -1)
+                    {
+                        if (index == -1)
+                            laneList.Add(wp);
+                        else
+                            laneList.Insert(index, wp);
+                        wp.SetWaypointGroup(this);
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        public void AddMultipleWaypoint(List<Waypoint> wp, int index, int laneIndex)
+        {
+            foreach (var laneList in allWaypoints)
+            {
+                if (laneList != null && laneList.Count > 0)
+                {
+                    foreach (var waypoint in laneList)
+                    {
+                        if (waypoint != null && waypoint.laneNumber == laneIndex && laneIndex != -1)
+                        {
+                            if (index == -1)
+                                laneList.AddRange(wp);
+                            else
+                                laneList.InsertRange(index, wp);
+
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+
+
         public void AddWaypoint_0(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 0;
+
             if (waypoints_0 == null) waypoints_0 = new List<Waypoint>();
             if (index == -1)
                 waypoints_0.Add(wp);
@@ -190,6 +257,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_1(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 1;
+
             if (waypoints_1 == null) waypoints_1 = new List<Waypoint>();
             if (index == -1)
                 waypoints_1.Add(wp);
@@ -200,6 +270,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_2(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 2;
+
             if (waypoints_2 == null) waypoints_2 = new List<Waypoint>();
             if (index == -1)
                 waypoints_2.Add(wp);
@@ -210,6 +283,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_3(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 3;
+
             if (waypoints_3 == null) waypoints_3 = new List<Waypoint>();
             if (index == -1)
                 waypoints_3.Add(wp);
@@ -220,6 +296,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_4(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 4;
+
             if (waypoints_4 == null) waypoints_4 = new List<Waypoint>();
             if (index == -1)
                 waypoints_4.Add(wp);
@@ -230,6 +309,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_5(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 5;
+
             if (waypoints_5 == null) waypoints_5 = new List<Waypoint>();
             if (index == -1)
                 waypoints_5.Add(wp);
@@ -240,6 +322,9 @@ namespace WayPointSystem
 
         public void AddWaypoint_6(Waypoint wp, int index = -1)
         {
+            if (wp != null)
+                wp.laneNumber = 6;
+
             if (waypoints_6 == null) waypoints_6 = new List<Waypoint>();
             if (index == -1)
                 waypoints_6.Add(wp);
@@ -377,6 +462,7 @@ namespace WayPointSystem
 
         private void OnDrawGizmos()
         {
+#if UNITY_EDITOR
             if (waypoints_0 != null && waypoints_0.Count > 0 && waypoints_1 != null && waypoints_1.Count > 0
                 && waypoints_2 != null && waypoints_2.Count > 0 && waypoints_3 != null && waypoints_3.Count > 0
                 && waypoints_4 != null && waypoints_4.Count > 0 && waypoints_5 != null && waypoints_5.Count > 0
@@ -395,7 +481,7 @@ namespace WayPointSystem
 
                     for (int i = 0; i < waypoints_0.Count; i++)
                     {
-                        Gizmos.DrawSphere(waypoints_0[i].GetPosition(), 0.3f);
+                        //Gizmos.DrawSphere(waypoints_0[i].GetPosition(), 0.3f);
                     }
                 }
 
@@ -412,7 +498,7 @@ namespace WayPointSystem
 
                     for (int i = 0; i < waypoints_1.Count; i++)
                     {
-                        Gizmos.DrawSphere(waypoints_1[i].GetPosition(), 0.3f);
+                        //Gizmos.DrawSphere(waypoints_1[i].GetPosition(), 0.3f);
                     }
                 }
 
@@ -431,7 +517,7 @@ namespace WayPointSystem
 
                         for (int i = 0; i < waypoints_2.Count; i++)
                         {
-                            Gizmos.DrawSphere(waypoints_2[i].GetPosition(), 0.3f);
+                            //Gizmos.DrawSphere(waypoints_2[i].GetPosition(), 0.3f);
                         }
                     }
                 }
@@ -450,7 +536,7 @@ namespace WayPointSystem
 
                         for (int i = 0; i < waypoints_3.Count; i++)
                         {
-                            Gizmos.DrawSphere(waypoints_3[i].GetPosition(), 0.3f);
+                            //Gizmos.DrawSphere(waypoints_3[i].GetPosition(), 0.3f);
                         }
                     }
                 }
@@ -469,7 +555,7 @@ namespace WayPointSystem
 
                         for (int i = 0; i < waypoints_4.Count; i++)
                         {
-                            Gizmos.DrawSphere(waypoints_4[i].GetPosition(), 0.3f);
+                            //Gizmos.DrawSphere(waypoints_4[i].GetPosition(), 0.3f);
                         }
                     }
                 }
@@ -488,7 +574,7 @@ namespace WayPointSystem
 
                         for (int i = 0; i < waypoints_5.Count; i++)
                         {
-                            Gizmos.DrawSphere(waypoints_5[i].GetPosition(), 0.3f);
+                            //Gizmos.DrawSphere(waypoints_5[i].GetPosition(), 0.3f);
                         }
                     }
                 }
@@ -506,7 +592,7 @@ namespace WayPointSystem
 
                     for (int i = 0; i < waypoints_6.Count; i++)
                     {
-                        Gizmos.DrawSphere(waypoints_6[i].GetPosition(), 0.3f);
+                        //Gizmos.DrawSphere(waypoints_6[i].GetPosition(), 0.3f);
                     }
                 }
 
@@ -524,7 +610,7 @@ namespace WayPointSystem
 
                         for (int i = 0; i < waypoints_6.Count; i++)
                         {
-                            Gizmos.DrawSphere(waypoints_6[i].GetPosition(), 0.3f);
+                            //Gizmos.DrawSphere(waypoints_6[i].GetPosition(), 0.3f);
                         }
                     }
                 }
@@ -561,7 +647,7 @@ namespace WayPointSystem
                 }
             }
 
-
+#endif
         }
 
         void OnApplicationQuit()
@@ -570,6 +656,20 @@ namespace WayPointSystem
 
         }
 
+        public bool IsWaypointValidAndSet()
+        {
+            if (waypoints_3 != null && waypoints_3.Count > 0 && waypoints_3.Count == waypoints_3.Count
+                &&waypoints_0 != null && waypoints_0.Count > 0 && waypoints_0.Count == waypoints_3.Count
+                && waypoints_1 != null && waypoints_1.Count > 0 && waypoints_1.Count == waypoints_3.Count
+                && waypoints_2 != null && waypoints_2.Count > 0 && waypoints_2.Count == waypoints_3.Count
+                && waypoints_4 != null && waypoints_4.Count > 0 && waypoints_4.Count == waypoints_3.Count
+                && waypoints_5 != null && waypoints_5.Count > 0 && waypoints_5.Count == waypoints_3.Count
+                && waypoints_6 != null && waypoints_6.Count > 0 && waypoints_6.Count == waypoints_3.Count
+                )
+                return true;
+
+            return false;
+        }
 
 #endif
     }

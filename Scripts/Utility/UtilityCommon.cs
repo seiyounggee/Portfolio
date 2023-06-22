@@ -4,9 +4,36 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
+using System.Linq;
+using System.Globalization;
 
 public static class UtilityCommon
 {
+    static System.Globalization.CultureInfo m_CultureInfo = null;
+
+    public static System.Globalization.CultureInfo CultureInfo
+    {
+        get
+        {
+            if (m_CultureInfo == null)
+            {
+                try
+                {
+                    m_CultureInfo = System.Globalization.CultureInfo.CreateSpecificCulture(I2.Loc.LocalizationManager.CurrentLanguageCode);
+                }
+                catch (System.Exception)
+                {
+                    m_CultureInfo = System.Globalization.CultureInfo.InvariantCulture;
+                }
+            }
+            return m_CultureInfo;
+        }
+        set
+        {
+            m_CultureInfo = value;
+        }
+    }
+
     public static List<T> ShuffleList<T>(ref List<T> list)
     {
         System.Random rnd = new System.Random();
@@ -21,6 +48,28 @@ public static class UtilityCommon
         }
 
         return list;
+    }
+
+    //AWARE!!!! If T is Reference type Deep Copy does not work!!!
+    public static List<List<T>> DeepCopyNestedList<T>(List<List<T>> originalList)
+    {
+        List<List<T>> copiedList = new List<List<T>>();
+
+        foreach (List<T> innerList in originalList)
+        {
+            List<T> copiedInnerList = new List<T>();
+
+            foreach (T item in innerList)
+            {
+                // Perform a deep copy of each item
+                T copiedItem = item;
+                copiedInnerList.Add(copiedItem);
+            }
+
+            copiedList.Add(copiedInnerList);
+        }
+
+        return copiedList;
     }
 
     public static void DebugColorLog(string log)
@@ -106,6 +155,39 @@ public static class UtilityCommon
         //return string.Format("{0}:{1}", min, Math.Round(sec, 2));
         return txt;
 
+    }
+
+    /* 인트형을 문자로 변형해주면서 컴마 넣어줌 */
+    public static string GetNumberChange(int value)
+    {
+        return value.ToString("n0", CultureInfo);
+    }
+
+    /* 인트형을 문자로 변형해주면서 컴마 넣어줌 */
+    public static string GetNumberChange(long value)
+    {
+        return value.ToString("n0", CultureInfo);
+    }
+
+    public static string GetNumberChange(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+            value = 0;
+        return value.ToString(CultureInfo);
+    }
+
+    public static string GetNumberChange(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            value = 0;
+        return value.ToString(CultureInfo);
+    }
+
+    public static string GetNumberChange(float value, string strType)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+            value = 0;
+        return value.ToString(strType, CultureInfo);
     }
 
     #region Mono
@@ -224,18 +306,47 @@ public static class UtilityCommon
     {
         if (anim != null && string.IsNullOrEmpty(animName) == false)
         {
-            anim.SetBool(animName, isOn);
+            if (HasParameter(animName, anim))
+                anim.SetBool(animName, isOn);
         }
+    }
+
+    public static bool HasParameter(string animName, Animator animator)
+    {
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == animName)
+                return true;
+        }
+        return false;
     }
 
     public static void SafeSetTrigger(this Animator anim, string animName)
     {
         if (anim != null && string.IsNullOrEmpty(animName) == false)
         {
-            anim.SetTrigger(animName);   
+            if (HasParameter(animName, anim))
+                anim.SetTrigger(animName);   
         }
     }
 
+    public static void SafeResetTrigger(this Animator anim, string animName)
+    {
+        if (anim != null && string.IsNullOrEmpty(animName) == false)
+        {
+            if (HasParameter(animName, anim))
+                anim.ResetTrigger(animName);
+        }
+    }
+
+    public static void SafeSetSpeed(this Animator anim, float speed)
+    {
+        if (anim != null)
+        {
+            speed = Mathf.Clamp(speed, 0f, 1f);
+            anim.speed = speed;
+        }
+    }
 
     public enum DebugColor { None, White, Black, Cyan, Red, Yellow, Blue, Magenta }
     public static void ColorLog(string msg, DebugColor color)
@@ -498,6 +609,44 @@ public static class UtilityCommon
         yield break;
     }
 
+    public static Coroutine PlayList(this Animation anim, List<string> clip, Action callback)
+    {
+        return anim.gameObject.StartCoroutine(PlayListCoroutine(anim, clip, 1f, callback));
+    }
+
+    public static Coroutine PlayList(this Animation anim, List<AnimationClip> clip, Action callback)
+    {
+        List<string> clipListName = clip.Select(x => x.name).ToList();
+
+        return anim.gameObject.StartCoroutine(PlayListCoroutine(anim, clipListName, 1f, callback));
+    }
+
+    public static IEnumerator PlayListCoroutine(Animation anim, List<string> list, float speed, Action callback)
+    {
+        if (anim.isPlaying) 
+            anim.Stop();
+
+        foreach (var i in list)
+        {
+            var aniName = i;
+
+            if (anim.HasClip(aniName))
+            {
+                anim.Play(aniName);
+                anim[aniName].speed = speed;
+
+                yield return null;
+                while (anim.isPlaying) 
+                    yield return null;
+            }
+
+            yield break;
+        }
+
+        if (callback != null)
+            callback();
+    }
+
     public static bool HasClip(this Animation anim, string clip)
     {
         return (anim.GetClip(clip) != null);
@@ -597,4 +746,20 @@ public static class UtilityCommon
     }
 
     #endregion
+
+
+    public static void SetParent(GameObject Parent, GameObject Child, bool resetPosition = true)
+    {
+        SetParent(Parent.transform, Child.transform, resetPosition);
+    }
+
+    public static void SetParent(Transform Parent, Transform Child, bool resetPosition = true)
+    {
+        Child.parent = Parent;
+        Child.localScale = Vector3.one;
+        Child.localRotation = Quaternion.identity;
+
+        if (resetPosition == true)
+            Child.localPosition = Vector3.zero;
+    }
 }

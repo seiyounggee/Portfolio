@@ -4,7 +4,7 @@ using UnityEngine;
 using Fusion;
 using Fusion.Sockets;
 
-public abstract class MonoSingletonPhotonCallback<T> : MonoBehaviour where T : MonoBehaviour, INetworkRunnerCallbacks
+public abstract class MonoSingletonPhotonCallback<T> : MonoBehaviour where T : MonoBehaviour
 {
     private static T instance = null;
 
@@ -34,7 +34,7 @@ public abstract class MonoSingletonPhotonCallback<T> : MonoBehaviour where T : M
         {
             if (instance != this as T)
             {
-                Debug.Log("ERROR......! Same Instance is existing...! Destroy...");
+                Debug.Log("Same Instance is existing...! Destroy...");
                 Destroy(gameObject);
                 return;
             }

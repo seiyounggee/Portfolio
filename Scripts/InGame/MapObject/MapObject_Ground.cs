@@ -6,14 +6,14 @@ public class MapObject_Ground : MonoBehaviour
 {
     [ReadOnly] public int id = -1;
 
-    public enum GroundType { None, Mud, Ocean}
+    public enum GroundType { None, Mud, Water}
     public GroundType currentGroundType = GroundType.None;
 
     [SerializeField] List<TriggerChecker> triggerChecker = new List<TriggerChecker>();
 
     [ReadOnly] public List<GroundInfo> groundStayList = new List<GroundInfo>();
 
-    public float GROUND_MUD_DECREASE_SPEED = 10f;
+    [ReadOnly] public float GROUND_MUD_DECREASE_SPEED = 10f; //머드 지형의 감속 속도
 
     [System.Serializable]
     public class GroundInfo
@@ -36,32 +36,17 @@ public class MapObject_Ground : MonoBehaviour
 
     public void OnEnable()
     {
-        DataManager.Instance.firebaseBasicValueChangedCallback += OnFirebaseBasicValueChangedCallback;
     }
 
     public void OnDisable()
     {
-
-        DataManager.Instance.firebaseBasicValueChangedCallback -= OnFirebaseBasicValueChangedCallback;
     }
 
     public void SetData(int id)
     {
         this.id = id;
 
-
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.groundData != null)
-        {
-            GROUND_MUD_DECREASE_SPEED = DataManager.Instance.basicData.groundData.GROUND_MUD_DECREASE_SPEED;
-        }
-    }
-
-    public void SetData()
-    {
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.groundData != null)
-        {
-            GROUND_MUD_DECREASE_SPEED = DataManager.Instance.basicData.groundData.GROUND_MUD_DECREASE_SPEED;
-        }
+        GROUND_MUD_DECREASE_SPEED = DataManager.Instance.GetGameConfig<float>("mudDecreaseSpeed");
     }
 
     private void Event_OnTriggerEnter(Collider other)
@@ -78,9 +63,6 @@ public class MapObject_Ground : MonoBehaviour
                 if (pm == null)
                     return;
 
-                if (pm.isEnteredTheFinishLine)
-                    return;
-
                 var p = groundStayList.Find(x => x.pm.Equals(pm));
                 if (p == null)
                     groundStayList.Add(new GroundInfo() { pm = pm });
@@ -95,12 +77,16 @@ public class MapObject_Ground : MonoBehaviour
                             pm.playerCar.ActivateMudFX();
                     }
                 }
-                else if (currentGroundType == GroundType.Ocean)
+                else if (currentGroundType == GroundType.Water)
                 {
                     InGameManager.Instance.ActivateFX(InGameManager.FX_Type.Waterdrowning, pm.transform.position);
 
-                    if (pm.IsMine)
+                    if (pm.IsMineAndNotAI)
+                    {
                         SoundManager.Instance.PlaySound(SoundManager.SoundClip.Water);
+                        Camera_Base.Instance.FX_Water.SafeSetActive(false);
+                        Camera_Base.Instance.FX_Water.SafeSetActive(true);
+                    }
                 }
             }
         }
@@ -118,9 +104,6 @@ public class MapObject_Ground : MonoBehaviour
             {
                 var pm = cc.pm;
                 if (pm == null)
-                    return;
-
-                if (pm.isEnteredTheFinishLine)
                     return;
 
                 var p = groundStayList.Find(x => x.pm.Equals(pm));
@@ -153,8 +136,6 @@ public class MapObject_Ground : MonoBehaviour
                 var pm = cc.pm;
                 if (pm == null)
                     return;
-                if (pm.isEnteredTheFinishLine)
-                    return;
 
                 var p = groundStayList.Find(x => x.pm.Equals(pm));
                 if (p != null)
@@ -178,21 +159,23 @@ public class MapObject_Ground : MonoBehaviour
         if (id == -1)
             return true;
 
-        if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+        if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGame
+            || PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameResult)
+        {
+            if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
+                || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
+                || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown)
+                return true;
+            else
+                return false;
+        }
+        else
             return true;
 
-        if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-        || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
-        || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
-        || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
-            return true;
-        else
-            return false;
     }
 
 
-    private void OnFirebaseBasicValueChangedCallback()
+    private void FirebaseBasicValueChanged_SubscriptionEvent()
     {
-        SetData();
     }
 }

@@ -5,15 +5,18 @@ using System.Linq;
 
 public partial class InGameManager
 {
+    [Header("[Mini Map]")]
     [ReadOnly] public List<GameObject> minimapLineList = new List<GameObject>();
     [ReadOnly] public List<MiniMapPlayerInfo> minimapPlayerList = new List<MiniMapPlayerInfo>();
     [ReadOnly] public Camera miniMapCam = null; 
 
-    private Vector3 MINIMAP_POSITION_OFFSET = Vector3.right * 2000f;
+    private Vector3 MINIMAP_POSITION_OFFSET = Vector3.right * 3000f;
     private float MINIMAP_CAM_HEIGHT = 200f;
 
     [SerializeField] Material minimapPlayer_MeMaterial = null;
     [SerializeField] Material minimapPlayer_OtherMaterial = null;
+
+    private GameObject minimapBase = null;
 
     public class MiniMapPlayerInfo
     {
@@ -23,9 +26,6 @@ public partial class InGameManager
 
     public void InitializeMiniMap()
     {
-        if (CommonDefine.GAME_MINIMAP_ACTIVATE == false)
-            return;
-
         foreach (var i in minimapLineList)
         {
             Destroy(i);
@@ -40,6 +40,9 @@ public partial class InGameManager
         if (miniMapCam != null)
             Destroy(miniMapCam.gameObject);
 
+        if (minimapBase != null)
+            Destroy(minimapBase);
+
         minimapLineList.Clear();
         minimapPlayerList.Clear();
         miniMapCam = null;
@@ -47,11 +50,11 @@ public partial class InGameManager
 
     public void SetMiniMap()
     {
-        if (CommonDefine.GAME_MINIMAP_ACTIVATE == false)
-            return;
-
         if (wayPoints == null)
             return;
+
+        minimapBase = new GameObject();
+        minimapBase.name = "Minimap_BASE";
 
         var list = new List<List<WayPointSystem.Waypoint>>();
         list.Add(wayPoints.waypoints_0);
@@ -59,7 +62,7 @@ public partial class InGameManager
         list.Add(wayPoints.waypoints_2);
         list.Add(wayPoints.waypoints_3);
         list.Add(wayPoints.waypoints_4);
-        list.Add(wayPoints.waypoints_6);
+        list.Add(wayPoints.waypoints_5);
         list.Add(wayPoints.waypoints_6);
 
         for (int i = 0; i < list.Count; i++)
@@ -69,7 +72,8 @@ public partial class InGameManager
 
             var prefabLr = GameObject.Instantiate(PrefabManager.Instance.MiniMap_LineRenderer);
             minimapLineList.Add(prefabLr);
-            prefabLr.gameObject.name = CommonDefine.GetGoNameWithHeader("MiniMap Line") + "  index-" + i;
+            prefabLr.name = CommonDefine.GetGoNameWithHeader("MiniMap Line") + "  index-" + i;
+            prefabLr.transform.parent = minimapBase.transform;
         }
 
         for (int i = 0; i < list.Count; i++)
@@ -96,7 +100,7 @@ public partial class InGameManager
 
 
 
-        for (int i = 0; i < CommonDefine.GetMaxPlayer(); i++)
+        for (int i = 0; i < DataManager.Instance.GetSessionTotalCount(); i++)
         {
             if (PrefabManager.Instance.MiniMap_Player == null)
                 continue;
@@ -104,24 +108,24 @@ public partial class InGameManager
             var prefabPlayer = GameObject.Instantiate(PrefabManager.Instance.MiniMap_Player);
             minimapPlayerList.Add(new MiniMapPlayerInfo() { obj = prefabPlayer , pm = null});
             prefabPlayer.gameObject.name = CommonDefine.GetGoNameWithHeader("MiniMap Player") + "  index-" + i;
+            prefabPlayer.transform.position = MINIMAP_POSITION_OFFSET;
+            prefabPlayer.transform.parent = minimapBase.transform;
         }
 
         if (PrefabManager.Instance.MiniMap_Camera != null)
         {
             var Prefabcam = GameObject.Instantiate(PrefabManager.Instance.MiniMap_Camera);
             miniMapCam = Prefabcam.GetComponent<Camera>();
+            Prefabcam.transform.parent = minimapBase.transform;
 
-            if (CameraManager.Instance.cam != null && miniMapCam != null)
-                miniMapCam.depth = CameraManager.Instance.cam.depth - 1;
+            if (CameraManager.Instance.mainCam != null && miniMapCam != null)
+                miniMapCam.depth = CameraManager.Instance.mainCam.depth - 1;
         }
     }
 
     public IEnumerator updateMiniMap = null;
     public IEnumerator UpdateMiniMap()
     {
-        if (CommonDefine.GAME_MINIMAP_ACTIVATE == false)
-            yield break;
-
         SetMiniMapPlayer();
 
         while (true)
@@ -134,17 +138,16 @@ public partial class InGameManager
                     {
 
                         Vector3 newPos = minimapPlayerList[i].pm.transform.position + MINIMAP_POSITION_OFFSET;
-                        newPos.y = 0f; //높이는 반영x
                         minimapPlayerList[i].obj.transform.position = newPos;
 
-                        if (miniMapCam != null && minimapPlayerList[i].pm.IsMine)
+                        if (miniMapCam != null && minimapPlayerList[i].pm.IsMineAndNotAI)
                         {
                             Vector3 camPos = newPos + Vector3.up * MINIMAP_CAM_HEIGHT;
                             miniMapCam.transform.position = camPos;
 
                             var waypoint = minimapPlayerList[i].pm.wg.waypoints_3;
-                            var currIndex = minimapPlayerList[i].pm.currentMoveIndex;
-                            var currLane= minimapPlayerList[i].pm.currentLaneType;
+                            var currIndex = minimapPlayerList[i].pm.client_currentMoveIndex;
+                            var currLane = minimapPlayerList[i].pm.client_currentLaneType;
                             int nextIndex = minimapPlayerList[i].pm.GetNextMoveIndex(currLane, currIndex);
                             var currWayDir = (waypoint[nextIndex].GetPosition() - waypoint[currIndex].GetPosition()).normalized;
                             currWayDir.y = 0f;
@@ -154,6 +157,10 @@ public partial class InGameManager
                             miniMapCam.transform.rotation = Quaternion.Slerp(miniMapCam.transform.rotation, rot, Time.fixedDeltaTime * 5f);
                         }
                     }
+                    else if (minimapPlayerList[i].pm == null)
+                    {
+                        minimapPlayerList[i].obj.SafeSetActive(false);
+                    }
                 }
             }
 
@@ -161,9 +168,13 @@ public partial class InGameManager
 
             if (gameState == GameState.EndGame)
                 break;
+
+            if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                break;
         }
 
-        miniMapCam.gameObject.SafeSetActive(false);
+        if (miniMapCam != null)
+            miniMapCam.gameObject.SafeSetActive(false);
     }
 
     private void SetMiniMapPlayer()
@@ -175,6 +186,8 @@ public partial class InGameManager
         {
             if (i < ListOfPlayers.Count && ListOfPlayers[i].pm != null)
                 minimapPlayerList[i].pm = ListOfPlayers[i].pm;
+            else
+                minimapPlayerList[i].obj.SafeSetActive(false);
         }
 
             
@@ -185,7 +198,7 @@ public partial class InGameManager
                 var mesh = minimapPlayerList[i].obj.GetComponent<MeshRenderer>();
                 if (mesh != null && miniMapCam != null)
                 {
-                    if (minimapPlayerList[i].pm.IsMine)
+                    if (minimapPlayerList[i].pm.IsMineAndNotAI)
                         mesh.material = minimapPlayer_MeMaterial;
                     else
                         mesh.material = minimapPlayer_OtherMaterial;

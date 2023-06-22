@@ -2,6 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/* 싱글턴 패턴
+ * Singleton Pattern for MonoBehaviour
+ */
+
 public abstract class MonoSingleton<T> : MonoBehaviour where T : MonoBehaviour
 {
     private static T instance = null;

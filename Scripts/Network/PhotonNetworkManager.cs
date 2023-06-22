@@ -5,9 +5,13 @@ using UnityEngine;
 using Fusion;
 using Fusion.Sockets;
 using System.Threading.Tasks;
+using System.Globalization;
+using Fusion.Photon.Realtime;
+using PNIX.Engine.NetClient;
 
 public enum ConnectionStatus
 {
+    None,
     Disconnected,
     Connecting,
     Failed,
@@ -16,8 +20,9 @@ public enum ConnectionStatus
 
 public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkManager>, INetworkRunnerCallbacks
 {
-    public static ConnectionStatus ConnectionStatus = ConnectionStatus.Disconnected;
+    public static ConnectionStatus ConnectionStatus = ConnectionStatus.None;
 
+    public static bool isJoinedLobby = false;
     public static bool isJoiningRoom = false;
     public static bool isJoinedRoom = false;
     public static bool isWaitingForOtherPlayers = false;
@@ -26,11 +31,11 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     public static bool isMatchSet = false; //master client에 의해 결정됨... matchSuccess 여부가
     public static bool cancelSearchingRoom = false;
 
-    [ReadOnly] public List<NetworkRunnerInfo> listOfNetworkRunners = new List<NetworkRunnerInfo>();
-    public List<NetworkRunnerInfo> ListOfNetworkRunners { get { return listOfNetworkRunners; } }
+    [ReadOnly] public List<NetworkRunnerPlayerInfo> listOfNetworkPlayerInfos = new List<NetworkRunnerPlayerInfo>();
+    public List<NetworkRunnerPlayerInfo> ListOfNetworkRunnerPlayerInfos { get { return listOfNetworkPlayerInfos; } }
 
     [Serializable]
-    public class NetworkRunnerInfo
+    public class NetworkRunnerPlayerInfo
     {
         public PlayerRef playerRef;
         public NetworkRunner networkRunner = null;
@@ -39,48 +44,18 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     }
 
     [ReadOnly] public NetworkRunner MyNetworkRunner = null;
+    [ReadOnly] public PlayerRef MyPlayerRef;
     [ReadOnly] public NetworkInGameRPCManager MyNetworkInGameRPCManager = null;
+    public List<NetworkInGameRPCManager> ListOfNetworkInGameRPCManager = new List<NetworkInGameRPCManager>();
 
-    public NetworkRunnerInfo MyNetworkRunnerInfo
-    {
-        get
-        {
-            if (ListOfNetworkRunners != null)
-            {
-                var x = ListOfNetworkRunners.Find(x => x.networkRunner.Equals(MyNetworkRunner));
-                if (x != null)
-                    return x;
-            }
-
-            return null;
-        }
-
-    }
-
-    public PlayerRef MyNetworkRunnerPlayerRef
-    {
-        get
-        {
-            if (ListOfNetworkRunners != null)
-            {
-                var x = ListOfNetworkRunners.Find(x => x.networkRunner.Equals(MyNetworkRunner));
-                if (x != null)
-                    return x.playerRef;
-            }
-
-            return new PlayerRef();
-        }
-    }
-
-
-    //구 isMaster Client... 같은 기능
-    public bool IsHost
+    //방장 개념... 나중엔 서버 처리로 하는게 나을듯....!
+    public bool IsRoomMasterClient
     {
         get
         {
             if (MyNetworkRunner != null)
             {
-                if (MyNetworkRunner.GameMode == GameMode.Host)
+                if(MyNetworkRunner.IsSharedModeMasterClient)
                     return true;
             }
 
@@ -91,11 +66,75 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     List<SessionInfo> currentSessionList = new List<SessionInfo>();
 
+    public SessionInfo MySessionInfo
+    {
+        get
+        {
+            if (MyNetworkRunner != null)
+                return MyNetworkRunner.SessionInfo;
+
+            return null;
+        }
+    }
+
+    public string MyRegion
+    {
+        get  
+        {
+            if (MySessionInfo != null && !string.IsNullOrEmpty(MySessionInfo.Region))
+            {
+                return MySessionInfo.Region;
+            }
+            else
+            {
+                var region = PhotonAppSettings.Instance.AppSettings.BestRegionSummaryFromStorage;
+
+                if (string.IsNullOrEmpty(region) || IsValidPhotonRegion(region) == false)
+                {
+                    region = PhotonAppSettings.Instance.AppSettings.FixedRegion;
+                }
+
+                if (string.IsNullOrEmpty(region) || IsValidPhotonRegion(region) == false)
+                {
+                    region = CNetworkManager.Instance.CountryCode.ToLower();
+                }
+
+                return region;
+            }
+        }
+    }
+
+    public bool IsValidPhotonRegion(string region)
+    {
+        if (string.IsNullOrEmpty(region))
+            return false;
+
+        List<string> validList = new List<string>()
+        {
+            "asia",
+            "cn",
+            "jp",
+            "eu",
+            "sa",
+            "kr",
+            "us",
+            "usw",
+        };
+
+        foreach (var i in validList)
+        {
+            if (region.ToLower().Equals(i))
+                return true;
+        }
+
+        return false;
+    }
+
     [Serializable]
     public class PingInfo
     {
         public string userId = "-1";
-        public NetworkRunnerInfo player = null;
+        public NetworkRunnerPlayerInfo player = null;
         public Queue<int> pingQueue = new Queue<int>();
 
         public int GetAveragePing()
@@ -116,21 +155,14 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     [SerializeField] public List<PingInfo> ListOfPingInfo = new List<PingInfo>();
 
-    public int RoomPlayersCount { get { if (ListOfNetworkRunners != null) return ListOfNetworkRunners.Count; else return 0; } }
+    public int RoomPlayersCount { get { if (ListOfNetworkRunnerPlayerInfos != null) return ListOfNetworkRunnerPlayerInfos.Count; else return 0; } }
 
     public Action startGameCallback = null;
     public Action startGameErrorCallback = null;
 
-    public const string SESSION_PROPERTY_MAPID = "mapID";
-    public const string SESSION_PROPERTY_MAXPLAYERS = "maxPlayers";
-
-    [Serializable]
-    public class PlayerIsSceneLoaded
-    {
-        public bool isLoaded = false;
-        public int id = -1; //photon의 PlayerId 사용
-    }
-    [SerializeField] public List<PlayerIsSceneLoaded> ListOfPlayerSceneLoaded = new List<PlayerIsSceneLoaded>();
+    public const string SESSION_PROPERTY_ROOMID = "mapID"; //맵id
+    public const string SESSION_PROPERTY_REALPLAYERCOUNT = "realPlayerCnt"; 
+    public const string SESSION_PROPERTY_AIPLAYERCOUNT = "aiPlayerCnt"; 
 
 
     public override void Awake()
@@ -152,7 +184,7 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     private void StartGameCallback()
     {
-        Debug.Log("<color=cyan>Start Game! " + " GAME_MAP_ID: " + CommonDefine.GAME_MAP_ID + " MinPlayer: " + CommonDefine.GetMinPlayer() + " MaxPlayer: " + CommonDefine.GetMaxPlayer() + "</color>");
+        Debug.Log("<color=cyan>Start Game! " + " GAME_MAP_ID: " + DataManager.GameMapID + " Real Player Count: " + DataManager.Instance.GetSessionRealPlayerCount() + "</color>");
     }
 
     private void StartErrorGameCallback()
@@ -163,15 +195,17 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         panelLobbyMain.Initialize();
     }
 
-    public void InitializeNetworkMatchSettings()
+    public void Initialize()
     {
         matchSuccess = false;
+        isJoinedLobby = false;
         isJoiningRoom = false;
         isJoinedRoom = false;
         isWaitingForOtherPlayers = false;
         isMatchSet = false;
         cancelSearchingRoom = false;
-        listOfNetworkRunners.Clear();
+        listOfNetworkPlayerInfos.Clear();
+        ListOfNetworkInGameRPCManager.Clear();
 
         if (MyNetworkInGameRPCManager != null)
         {
@@ -184,12 +218,37 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
             Destroy(MyNetworkInGameRPCManager.gameObject);
             MyNetworkInGameRPCManager = null;
         }
-        /*
-        ChangePhotonNetworkRate(0);
 
-        UtilityCoroutine.StopCoroutine(ref recordPing, this);
-        UtilityCoroutine.StartCoroutine(ref recordPing, RecordPing(), this);
-        */
+        if (MyNetworkRunner != null)
+        {
+            Destroy(MyNetworkRunner.gameObject);
+            MyNetworkRunner = null;
+        }
+    }
+
+    public void ResetNetworkMatchSettings()
+    {
+        matchSuccess = false;
+        isJoinedLobby = false;
+        isJoiningRoom = false;
+        isJoinedRoom = false;
+        isWaitingForOtherPlayers = false;
+        isMatchSet = false;
+        cancelSearchingRoom = false;
+        listOfNetworkPlayerInfos.Clear();
+        ListOfNetworkInGameRPCManager.Clear();
+
+        if (MyNetworkInGameRPCManager != null)
+        {
+            Destroy(MyNetworkInGameRPCManager.gameObject);
+            MyNetworkInGameRPCManager = null;
+        }
+
+        if (MyNetworkInGameRPCManager != null)
+        {
+            Destroy(MyNetworkInGameRPCManager.gameObject);
+            MyNetworkInGameRPCManager = null;
+        }
 
         LeaveSession(() =>
             {
@@ -205,14 +264,14 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     public NetworkRunner CreatePhotonNetworkRunner()
     {
-        if (MyNetworkRunner == null)
+        if (MyNetworkRunner  == null)
         {
             var runnerGo = new GameObject();
             runnerGo.transform.SetParent(this.transform);
             runnerGo.name = "Photon Network Runner";
             MyNetworkRunner = runnerGo.AddComponent<NetworkRunner>();
             MyNetworkRunner.ProvideInput = true;
-            MyNetworkRunner.AddCallbacks(this); //꼭 이 스크립트에 callback 포함시켜주자...!
+            MyNetworkRunner.AddCallbacks(this);
         }
 
         return MyNetworkRunner;
@@ -232,6 +291,8 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         if (result.Ok)
         {
             // all good
+            isJoinedLobby = true;
+            Debug.Log("<color=cyan>NetworkRunner Successfully Joined Lobby!</color>");
         }
         else
         {
@@ -239,25 +300,29 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         }
     }
 
-    async void StartGame(GameMode mode, int mapID = 0, int maxPlayers = 2)
+    async void StartGame(GameMode mode, long roomID = 0, int realPlayerCnt = 2, int aiPlayerCnt = 0)
     {
         if (MyNetworkRunner == null)
         {
             return;
         }
 
+        var appSettings = IsValidPhotonRegion(MyRegion) ? BuildCustomAppSetting(MyRegion) : BuildCustomAppSetting();
+
         var customProps = new Dictionary<string, SessionProperty>();
 
-        customProps[SESSION_PROPERTY_MAPID] = mapID;
-        customProps[SESSION_PROPERTY_MAXPLAYERS] = maxPlayers;
-
-        if (mode == GameMode.Single)
-            maxPlayers = 1;
+        customProps[SESSION_PROPERTY_ROOMID] = roomID.ToString();
+        customProps[SESSION_PROPERTY_REALPLAYERCOUNT] = realPlayerCnt;
+        customProps[SESSION_PROPERTY_AIPLAYERCOUNT] = aiPlayerCnt;
 
         var result = await MyNetworkRunner.StartGame(new StartGameArgs()
         {
             GameMode = mode,
             SessionProperties = customProps,
+            SessionName = roomID.ToString(),
+            Scene = null,
+            CustomPhotonAppSettings = appSettings
+
         });
 
         if (result.Ok)
@@ -270,9 +335,31 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         }
     }
 
-    public async void JoinRandomSession()
+    private AppSettings BuildCustomAppSetting(string region = null, string customAppID = null, string appVersion = "1.0.0")
     {
-        if (isWaitingForOtherPlayers || isJoiningRoom || isJoinedRoom)
+
+        var appSettings = PhotonAppSettings.Instance.AppSettings.GetCopy();
+
+        appSettings.UseNameServer = true;
+        appSettings.AppVersion = appVersion;
+
+        if (string.IsNullOrEmpty(region) == false
+            && IsValidPhotonRegion(region))
+        {
+            appSettings.FixedRegion = region.ToLower();
+        }
+
+        // If the Region is set to China (CN),
+        // the Name Server will be automatically changed to the right one
+        // appSettings.Server = "ns.photonengine.cn";
+
+        return appSettings;
+    }
+
+    //특정 id로 연결
+    public async void JoinSession_Multi_Paticular(long desiredRoomID, int realPlayerCnt, int aiPlayerCnt)
+    {
+        if (isWaitingForOtherPlayers || isJoiningRoom || isJoinedRoom || !isJoinedLobby)
             return;
 
         if (currentSessionList != null && currentSessionList.Count > 0)
@@ -282,34 +369,28 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
             foreach (var sessionItem in currentSessionList)
             {
-                // Check for a specific Custom Property
-                if (sessionItem.Properties.TryGetValue(SESSION_PROPERTY_MAPID, out var propertyType) && propertyType.IsInt)
+                if (sessionItem.Name.Equals(desiredRoomID.ToString()))
                 {
-
-                    var mapID = (int)propertyType.PropertyValue;
-
-                    // Check for the desired Game Type
-                    if (mapID == CommonDefine.GAME_MAP_ID)
-                    {
-
-                        // Store the session info
-                        session = sessionItem;
-                        break;
-                    }
+                    // Store the session info
+                    session = sessionItem;
+                    break;
                 }
             }
 
             // Check if there is any valid session
-            if (session != null)
+            if (session != null && session.IsOpen && session.IsValid)
             {
                 Debug.Log($"Joining {session.Name}");
+
+                DataManager.Instance.SetMapID(DataManager.GameMapID); //todo...!
 
                 // Join
                 var result = await MyNetworkRunner.StartGame(new StartGameArgs()
                 {
-                    GameMode = GameMode.Client, // Server GameMode, could be Shared as well
+                    GameMode = GameMode.Shared, // Server GameMode, could be Shared as well
                     SessionName = session.Name, // Session to Join
-                                                // ...
+                    Scene = null,
+                    // ...
                 });
 
                 if (result.Ok)
@@ -323,14 +404,13 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
             }
             else
             {
-                StartGame(GameMode.Host, CommonDefine.GAME_MAP_ID, CommonDefine.GetMaxPlayer());
+                StartGame(GameMode.Shared, desiredRoomID, realPlayerCnt, aiPlayerCnt);
             }
         }
         else
         {
-            StartGame(GameMode.Host, CommonDefine.GAME_MAP_ID, CommonDefine.GetMaxPlayer());
+            StartGame(GameMode.Shared, desiredRoomID, realPlayerCnt, aiPlayerCnt);
         }
-
     }
 
     public async void LeaveSession(Action callback = null)
@@ -352,7 +432,6 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     public void CancelSearchingRoom(Action callback = null)
     {
-
         cancelSearchingRoom = true;
         timeWaitingForOtherPlayers = 0f;
 
@@ -367,21 +446,31 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
             return false;
     }
 
-    public int GetPing()
+    public void SetSessionOpen(bool isOpen)
     {
-        //TODO
+        if (MyNetworkRunner != null && MyNetworkRunner.SessionInfo != null && MyNetworkRunner.SessionInfo.IsValid)
+        {
+            MyNetworkRunner.SessionInfo.IsOpen = isOpen;
+            MyNetworkRunner.SessionInfo.IsVisible = false; //항상 비공개로!
+        }
+    }
+
+    public int GetPing() //Rount Trip Time
+    {
+        if (MyNetworkRunner != null && MyPlayerRef != null
+            && InGameManager.Instance.myPlayer != null
+            && (InGameManager.Instance.gameState == InGameManager.GameState.PlayGame || InGameManager.Instance.gameState == InGameManager.GameState.EndCountDown))
+        {
+            return (int)(MyNetworkRunner.GetPlayerRtt(MyPlayerRef) * 1000);
+        }
+
         return 0;
     }
 
-    public int GetPingVariance()
-    {
-        //TODO
-        return 0;
-    }
 
     [ReadOnly] public Queue<int> pingContainer = new Queue<int>();
-    private IEnumerator recordPing = null;
-    private IEnumerator RecordPing()
+    public IEnumerator recordPing = null;
+    public IEnumerator RecordPing()
     {
         if (pingContainer == null)
             pingContainer = new Queue<int>();
@@ -391,14 +480,19 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
         while (true)
         {
-            pingContainer.Enqueue(GetPing());
+            if (GetPing() > 0) //Valid한 경우에만...
+                pingContainer.Enqueue(GetPing());
 
             if (pingContainer.Count > count)
                 pingContainer.Dequeue();
 
             yield return new WaitForSeconds(sec);
+
+            if (MyNetworkInGameRPCManager == null)
+                break;
         }
     }
+
     public int GetAveragePing()
     {
         if (pingContainer != null && pingContainer.Count > 0)
@@ -414,8 +508,8 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         return GetPing();
     }
 
-    public const int BAD_PING_LIMIT = 100;
-    public const int BEST_PING_LIMIT = 25;
+    public const int BAD_PING_LIMIT = 200;
+    public const int GOOD_PING_LIMIT = 30;
 
     public bool IsPingAtBadCondition()
     {
@@ -424,8 +518,6 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
             return false;
         else
             return true;
-
-        return false;
     }
 
     public bool IsPingAtGoodCondition()
@@ -435,13 +527,11 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     public bool IsPingAtBestCondition()
     {
-        int pingLimit = BEST_PING_LIMIT;
+        int pingLimit = GOOD_PING_LIMIT;
         if (GetAveragePing() <= pingLimit)
             return true;
         else
             return false;
-
-        return false;
     }
 
     public void ClearPingInfoList()
@@ -451,10 +541,10 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
     public void SetPingInfoList(string pid, int ping)
     {
-        if (listOfNetworkRunners == null || ListOfPingInfo == null)
+        if (listOfNetworkPlayerInfos == null || ListOfPingInfo == null)
             return;
 
-        var player = listOfNetworkRunners.Find(x => x.playerId.Equals(pid));
+        var player = listOfNetworkPlayerInfos.Find(x => x.playerId.Equals(pid));
         var info = ListOfPingInfo.Find(x => x.userId.Equals(pid));
 
         if (info == null)
@@ -472,7 +562,7 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         }
     }
 
-    public NetworkRunnerInfo GetBestPingPlayer()
+    public NetworkRunnerPlayerInfo GetBestPingPlayer()
     {
         if (ListOfPingInfo == null && ListOfPingInfo.Count > 0)
             return null;
@@ -493,7 +583,6 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
 
         if (!Application.isPlaying)
             return;
-
     }
 
     public void CreateRPCManager()
@@ -504,73 +593,58 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
             MyNetworkInGameRPCManager = null;
         }
 
-        if (MyNetworkRunner != null)
+        var prefab = PrefabManager.Instance.NetworkInGameRPCManager;
+        foreach (var i in ListOfNetworkRunnerPlayerInfos)
         {
-            var prefab = PrefabManager.Instance.NetworkInGameRPCManager;
-            MyNetworkRunner.Spawn(prefab, Vector3.zero, Quaternion.identity);
-        }
-        else
-        {
-            Debug.Log("Error.... MyNetworkRunner is null!!!");
+            i.networkRunner.Spawn(prefab, Vector3.zero, Quaternion.identity, i.playerRef);
         }
     }
 
-    public void UpdateListOfNetworkRunners(NetworkRunner runner, PlayerRef player)
+    public void UpdateListOfNetworkRunnerPlayerInfo(NetworkRunner runner, PlayerRef player)
     {
-        foreach (var i in listOfNetworkRunners)
+        if (player == runner.LocalPlayer)
         {
-            if (i == null)
-                listOfNetworkRunners.Remove(i);
+            MyPlayerRef = player;
         }
 
-        bool playerExists = false;
-        foreach (var i in listOfNetworkRunners)
+        listOfNetworkPlayerInfos.Clear();
+        foreach (var i in runner.ActivePlayers)
         {
-            if (i.playerRef.Equals(player))
-                playerExists = true;
+            listOfNetworkPlayerInfos.Add(new NetworkRunnerPlayerInfo() { networkRunner = runner, playerRef = i });
         }
 
-        if (playerExists == false)
-            listOfNetworkRunners.Add(new NetworkRunnerInfo() { networkRunner = runner, playerRef = player });
+        listOfNetworkPlayerInfos.Sort((x, y) => x.playerRef.PlayerId.CompareTo(y.playerRef.PlayerId));
     }
 
-    public void UpdateSceneLoadedList()
+    public void UpdateListOfNetworkInGameRPCManager(NetworkInGameRPCManager manger)
     {
-        ListOfPlayerSceneLoaded = new List<PlayerIsSceneLoaded>();
-        ListOfPlayerSceneLoaded.Clear();
+        if (ListOfNetworkInGameRPCManager.Contains(manger) == false)
+            ListOfNetworkInGameRPCManager.Add(manger);
 
-        var list = ListOfNetworkRunners;
-        for (int i = 0; i < list.Count; i++)
+        foreach (var i in ListOfNetworkInGameRPCManager)
         {
-            ListOfPlayerSceneLoaded.Add(new PlayerIsSceneLoaded() { isLoaded = false, id = list[i].playerId });
+            if (i.IsMine)
+                MyNetworkInGameRPCManager = i;
         }
     }
-
-
 
 
 
     public Action<NetworkRunner, PlayerRef> PhotonCallback_OnPlayerJoined;
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) 
     {
-        Debug.Log("<color=cyan>OnPlayerJoined</color>");
+        Debug.Log("<color=cyan>OnPlayerJoined!</color>");
 
         //Runner 명단 Update
-        UpdateListOfNetworkRunners(runner, player);
+        UpdateListOfNetworkRunnerPlayerInfo(runner, player);
 
         if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.Lobby || PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameReady)
         {
-            UpdateSceneLoadedList();
-            timeWaitingForOtherPlayers = CommonDefine.GAME_TIME_WAITING_BEFORE_START; //사람 들어올떄마다 초기화 해주자
+            timeWaitingForOtherPlayers = DataManager.GAME_TIME_WAITING_BEFORE_START; //사람 들어올떄마다 초기화 해주자
         }
 
         if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.Lobby)
         {
-            //Host만...!
-            if (runner.GameMode == GameMode.Host)
-            {
-                CreateRPCManager();
-            }
             PhaseManager.Instance.ChangePhase(CommonDefine.Phase.InGameReady);
         }
 
@@ -584,8 +658,8 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     {
         //Remove Player from List
         bool playerExists = false;
-        NetworkRunnerInfo info = null;
-        foreach (var i in listOfNetworkRunners)
+        NetworkRunnerPlayerInfo info = null;
+        foreach (var i in listOfNetworkPlayerInfos)
         {
             if (i.playerRef.Equals(player))
             {
@@ -595,14 +669,10 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
         }
 
         if (playerExists == true && info != null)
-            listOfNetworkRunners.Remove(info);
-
-        //씬 명단 update (일부 경우)
-        if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.Lobby || PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameReady)
-            UpdateSceneLoadedList();
+            listOfNetworkPlayerInfos.Remove(info);
 
         if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.Lobby || PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameReady)
-            timeWaitingForOtherPlayers = CommonDefine.GAME_TIME_WAITING_BEFORE_START; //사람 들어올떄마다 초기화 해주자
+            timeWaitingForOtherPlayers = DataManager.GAME_TIME_WAITING_BEFORE_START; //사람 들어올떄마다 초기화 해주자
 
         PhotonCallback_OnPlayerLeft?.Invoke(runner, player);
     }
@@ -620,7 +690,7 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     public Action<NetworkRunner> PhotonCallback_OnConnectedToServer;
     public void OnConnectedToServer(NetworkRunner runner)
     {
-        Debug.Log("<color=cyan>OnConnectedToServer</color>");
+        Debug.Log("<color=cyan>Photon OnConnectedToServer</color>");
 
         SetConnectionStatus(ConnectionStatus.Connected);
         PhotonCallback_OnConnectedToServer?.Invoke(runner);
@@ -629,7 +699,7 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     public Action<NetworkRunner> PhotonCallback_OnDisconnectedFromServer;
     public void OnDisconnectedFromServer(NetworkRunner runner)
     {
-        Debug.Log("<color=cyan>OnDisconnectedFromServer</color>");
+        Debug.Log("<color=cyan>Photon OnDisconnectedFromServer</color>");
 
         SetConnectionStatus(ConnectionStatus.Disconnected);
         PhotonCallback_OnDisconnectedFromServer?.Invoke(runner);
@@ -651,7 +721,7 @@ public class PhotonNetworkManager : MonoSingletonPhotonCallback<PhotonNetworkMan
     public Action<NetworkRunner, List<SessionInfo>> PhotonCallback_OnSessionListUpdated;
     public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
     {
-        Debug.Log("<color=cyan>OnSessionListUpdated....! Session List Count: " + sessionList.Count + "</color>");
+        Debug.Log("<color=cyan>Photon OnSessionListUpdated....! Session List Count: " + sessionList.Count + "</color>");
         currentSessionList = sessionList;
 
         PhotonCallback_OnSessionListUpdated?.Invoke(runner, sessionList);

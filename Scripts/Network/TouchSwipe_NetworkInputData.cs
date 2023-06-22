@@ -5,6 +5,7 @@ using Fusion;
 
 public struct TouchSwipe_NetworkInputData : INetworkInput
 {
+    public NetworkId networkPlayerID;
     public enum EventType { None, StartDrag, Drag, EndDrag}
     public EventType currentEventType;
 

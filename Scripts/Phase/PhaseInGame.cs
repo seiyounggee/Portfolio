@@ -20,27 +20,19 @@ public class PhaseInGame : PhaseBase
 
     IEnumerator PhaseInGameCoroutine()
     {
-        UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelCommon);
+        UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PopupDefault);
         UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelNickname);
-        UIManager_NGUI.Instance.ActivateUI(UIManager_NGUI.UIType.UI_PanelLoading); //임시...?
+        UIManager_NGUI.Instance.ActivateUI(UIManager_NGUI.UIType.UI_PanelLoading, UI_Base.Depth.High); //임시...?
 
         yield return new WaitForSecondsRealtime(0.5f);
 
         SceneManager.LoadScene(CommonDefine.InGameScene);
 
         string sceneName = "";
-        var md = DataManager.Instance.mapData;
-        var bd = DataManager.Instance.basicData;
-        if (md != null && bd != null)
+        var mapRef = DataManager.Instance.GetMapRef(DataManager.GameMapID);
+        if (mapRef != null)
         {
-            foreach (var i in md.MapDataList)
-            {
-                if (i.id.Equals(bd.gameData.GAME_MAP_ID))
-                {
-                    sceneName = i.SCENE_NAME;
-                    break;
-                }
-            }
+            sceneName = mapRef.assetName;
         }
 
         if (string.IsNullOrEmpty(sceneName) == false && sceneName != "NONE")
@@ -68,14 +60,13 @@ public class PhaseInGame : PhaseBase
             yield return null;
         }
 
-        myNetworkInGameRPCManager.RPC_SceneIsLoaded(PhotonNetworkManager.Instance.MyNetworkRunnerInfo.playerId);
+        myNetworkInGameRPCManager.RPC_SceneIsLoaded(AccountManager.Instance.PID);
 
         UIManager_NGUI.Instance.DeactivateLobbyUI();
         UIManager_NGUI.Instance.ActivateUI(UIManager_NGUI.UIType.UI_PanelInGame);
 
         //게임 시작
         InGameManager.Instance.StartGame();
-        //PhotonNetworkManager.Instance.ChangePhotonNetworkRate(1);
 
         SoundManager.Instance.PlaySound_BGM(SoundManager.SoundClip.Ingame_BGM_01);
     }

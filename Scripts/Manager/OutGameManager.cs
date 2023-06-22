@@ -5,27 +5,16 @@ using UnityEngine;
 public class OutGameManager : MonoSingleton<OutGameManager>
 {
     [ReadOnly] public OutGamePlayer outGamePlayer = null;
-    [ReadOnly] public GameObject outGameFloor = null;
+    [ReadOnly] public OutGameBackground outGameBackground = null;
 
     private void Update()
     {
-        if (outGamePlayer != null)
-        {
-            Vector3 euler = outGamePlayer.transform.rotation.eulerAngles + new Vector3(0f, Time.deltaTime * 20f, 0f);
-            Quaternion rot = Quaternion.Euler(euler);
-            outGamePlayer.transform.rotation = rot;
-        }
-
-
         if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.Lobby)
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                var ui = PrefabManager.Instance.UI_PanelCommon;
-                string msg = "End Game?";
-
-                ui.SetData(msg, () => { Application.Quit(); });
-                ui.Show(UI_PanelBase.Depth.High);
+                string msg = "Outgame_EndApp".Localize();
+                UIManager_NGUI.Instance.ActivatePanelDefault_YesNo(msg, () => { Application.Quit(); });
             }
         }
     }
@@ -38,10 +27,10 @@ public class OutGameManager : MonoSingleton<OutGameManager>
             outGamePlayer = p.GetComponent<OutGamePlayer>();
         }
 
-        if (outGameFloor == null)
+        if (outGameBackground == null)
         {
-            outGameFloor = Instantiate(PrefabManager.Instance.OutGameFloor, Vector3.zero, Quaternion.identity);
-            outGameFloor.transform.position = new Vector3(0f, -0.1f, -1.2f);
+            GameObject p = Instantiate(PrefabManager.Instance.OutGameBackground, Vector3.zero, Quaternion.identity);
+            outGameBackground  = p.GetComponent<OutGameBackground>();
         }
     }
 
@@ -51,5 +40,24 @@ public class OutGameManager : MonoSingleton<OutGameManager>
         {
             outGamePlayer.SetData();
         }
+    }
+
+    public void InitializeOutGameUI()
+    {
+        PrefabManager.Instance.UI_PanelLobby_Main.Initialize();
+        PrefabManager.Instance.UI_PanelLobby_TabMenu.Initialize();
+        PrefabManager.Instance.UI_PanelLobby_Garage.Initialize();
+        PrefabManager.Instance.UI_PanelLobby_Character.Initialize();
+        PrefabManager.Instance.UI_PanelLobby_Shop.Initialize();
+        PrefabManager.Instance.UI_PanelLobby_Quest.Initialize();
+    }
+
+    public void ActivateOutGamePlayerAndCam()
+    {
+        PrefabManager.Instance.UI_PanelLobby_Main.SetOutGameData();
+        if (outGamePlayer != null)
+            outGamePlayer.ChangeMovementType(OutGamePlayer.MovementType.Move);
+        CameraManager.Instance.ChangeCamType(CameraManager.CamType.OutGame_MainCam_LookAt);
+
     }
 }

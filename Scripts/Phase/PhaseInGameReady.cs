@@ -11,7 +11,6 @@ public class PhaseInGameReady : PhaseBase
     public Action OnFailToFindOtherPlayers = null;
 
     private PhotonNetworkManager photonNetworkManager => PhotonNetworkManager.Instance;
-    private NetworkInGameRPCManager myNetworkInGameRPCManager => photonNetworkManager.MyNetworkInGameRPCManager;
 
     protected override void OnEnable()
     {
@@ -38,77 +37,85 @@ public class PhaseInGameReady : PhaseBase
         if (PhotonNetworkManager.Instance.MyNetworkRunner != null
             && PhotonNetworkManager.Instance.MyNetworkRunner.SessionInfo != null)
         {
-            if (PhotonNetworkManager.Instance.IsHost)
-                PhotonNetworkManager.Instance.MyNetworkRunner.SessionInfo.IsOpen = true;
+            if (PhotonNetworkManager.Instance.IsRoomMasterClient)
+                PhotonNetworkManager.Instance.SetSessionOpen(true);
         }
 
         PhotonNetworkManager.isMatchSet = false;
         PhotonNetworkManager.matchSuccess = false;
-        PhotonNetworkManager.timeWaitingForOtherPlayers = CommonDefine.GAME_TIME_WAITING_BEFORE_START;
+        PhotonNetworkManager.timeWaitingForOtherPlayers = DataManager.GAME_TIME_WAITING_BEFORE_START;
 
+        bool matchNumSuccess = false;
         while (true)
         {
             if (PhotonNetworkManager.isMatchSet)
                 break;
 
-            if (PhotonNetworkManager.Instance.ListOfNetworkRunners != null)
+            if (PhotonNetworkManager.Instance.ListOfNetworkRunnerPlayerInfos != null)
             {
-                if (PhotonNetworkManager.Instance.ListOfNetworkRunners.Count == CommonDefine.GetMaxPlayer()
+                if (PhotonNetworkManager.Instance.ListOfNetworkRunnerPlayerInfos.Count == DataManager.Instance.GetSessionRealPlayerCount()
                     && PhotonNetworkManager.cancelSearchingRoom == false)
                 {
-                    if (PhotonNetworkManager.Instance.IsHost)
-                        myNetworkInGameRPCManager.RPC_MatchSuccess(true);
+                    matchNumSuccess = true;
+                    break;
                 }
             }
 
-            //취소 버튼 누르지 않았는데 유저 대기 시간이 모두 소모 되었을때
+            //유저 대기 시간이 모두 소모 되었을때
             if (PhotonNetworkManager.cancelSearchingRoom == false
-                && PhotonNetworkManager.timeWaitingForOtherPlayers <= 0
-                && PhotonNetworkManager.matchSuccess == false)
+                && PhotonNetworkManager.timeWaitingForOtherPlayers <= 0)
             {
-                //최소 대기인원 이상이면 진행
-                if (PhotonNetworkManager.Instance.ListOfNetworkRunners.Count >= CommonDefine.GetMinPlayer())
-                {
-                    if (PhotonNetworkManager.Instance.IsHost)
-                        myNetworkInGameRPCManager.RPC_MatchSuccess(true);
-                }
-                else //최소 대기인원 이하면 실패
-                {
-                    if (PhotonNetworkManager.Instance.IsHost)
-                        myNetworkInGameRPCManager.RPC_MatchSuccess(false);
-                }
+                matchNumSuccess = false;
+                break;
             }
 
             //취소 버튼 눌렀을 경우
             if (PhotonNetworkManager.cancelSearchingRoom == true)
             {
                 LeaveRoomCallback();
+                matchNumSuccess = false;
+                break;
             }
 
             PhotonNetworkManager.timeWaitingForOtherPlayers -= Time.fixedDeltaTime; //무조건 fixedDelta로 해야함
 
             yield return new WaitForFixedUpdate();
+        }
 
-#if CHEAT
-            if (CommonDefine.isForcePlaySolo == true)
+        if (matchNumSuccess)
+        {
+            if (PhotonNetworkManager.Instance.IsRoomMasterClient)
             {
-                if (PhotonNetwork.IsMasterClient)
-                    InGameManager.Instance.RaiseEvent_MatchSuccess(true);
+                PhotonNetworkManager.Instance.CreateRPCManager();
             }
 
-            if (PhotonNetworkManager.isMatchSet)
-                break;
-#endif
+            while (true)
+            {
+                if (photonNetworkManager.MyNetworkInGameRPCManager != null
+                    && PhotonNetworkManager.Instance.ListOfNetworkInGameRPCManager.Count == PhotonNetworkManager.Instance.ListOfNetworkRunnerPlayerInfos.Count)
+                {
+                    photonNetworkManager.MyNetworkInGameRPCManager.RPC_MatchSuccess(true);
+                }
+
+                if (PhotonNetworkManager.isMatchSet)
+                {
+                    break;
+                }
+
+                yield return null;
+            }
         }
+        else
+        {
+            PhotonNetworkManager.matchSuccess = false;
+        }
+
+
 
         if (PhotonNetworkManager.matchSuccess == true) //매치 성공
         {
             Debug.Log("Match Success!");
             yield return new WaitForSecondsRealtime(1f);
-            /*
-            if (PhotonNetwork.InRoom == true)
-                PhotonNetwork.CurrentRoom.IsOpen = false;
-            */
             PhotonNetworkManager.isJoiningRoom = false;
             PhotonNetworkManager.isJoinedRoom = false;
             PhotonNetworkManager.isWaitingForOtherPlayers = false;
@@ -120,6 +127,7 @@ public class PhaseInGameReady : PhaseBase
         }
         else //매치 실패
         {
+            PnixNetworkManager.Instance.SendCancelJoiningRace();
             PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
         }
     }

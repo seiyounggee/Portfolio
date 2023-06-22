@@ -121,7 +121,7 @@ public class PhaseManager : MonoSingleton<PhaseManager>
             OnPhaseChangeCallback?.Invoke();
         }
 
-        UtilityCommon.ColorLog("Phase Changed To: " + currentPhase.ToString(), UtilityCommon.DebugColor.Magenta);
+        UtilityCommon.ColorLog("Phase Changed To: " + currentPhase.ToString(), UtilityCommon.DebugColor.White);
     }
 
     public T GetPhase<T>(CommonDefine.Phase phase) where T: PhaseBase

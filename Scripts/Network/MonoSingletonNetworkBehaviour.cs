@@ -4,6 +4,10 @@ using UnityEngine;
 using Fusion;
 using Fusion.Sockets;
 
+/* ╫л╠шео фпео
+ * Singleton Pattern for Fusion NetworkBehaviour
+ */
+
 public class MonoSingletonNetworkBehaviour<T> : NetworkBehaviour where T : NetworkBehaviour
 {
     private static T instance = null;
@@ -34,7 +38,7 @@ public class MonoSingletonNetworkBehaviour<T> : NetworkBehaviour where T : Netwo
         {
             if (instance != this as T)
             {
-                Debug.Log("ERROR......! Same Instance is existing...! Destroy...");
+                Debug.Log("Same Instance is existing...! Destroy...");
                 Destroy(gameObject);
                 return;
             }

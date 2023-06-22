@@ -23,11 +23,19 @@ public class PhaseInGameResult : PhaseBase
         yield return null;
 
         var ingamePanel = PrefabManager.Instance.UI_PanelIngame;
+
         if (ingamePanel.gameObject.activeSelf == true)
         {
             ingamePanel.ActivateEndGameResultTxt();
         }
 
+        if (MapObjectManager.Instance.podium != null)
+        {
+            CameraManager.Instance.ChangeCamType(CameraManager.CamType.InGame_SubCam_MapOutroCeremony);
+            MapObjectManager.Instance.podium.ActivatePodium();
+        }
+
+        //추후 서버에서 관리...?
         UtilityCoroutine.StartCoroutine(ref autoLeaveRoomAfterTime, AutoLeaveRoomAfterTime(), this);
     }
 
@@ -36,27 +44,12 @@ public class PhaseInGameResult : PhaseBase
     private IEnumerator AutoLeaveRoomAfterTime()
     {
         //30초 후 자동으로 꺼주자...
-        yield return new WaitForSecondsRealtime(CommonDefine.GAME_AUTO_LEAVE_ROOM_TIME);
+        yield return new WaitForSecondsRealtime(DataManager.GAME_AUTO_LEAVE_ROOM_TIME);
 
         if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameResult)
         {
-            /*
-            if (Photon.Pun.PhotonNetwork.OfflineMode || Photon.Pun.PhotonNetwork.CurrentRoom == null)
-            {
-                PhaseManager.Instance.ChangePhase(CommonDefine.Phase.Lobby);
-
-            }
-            else
-            {
-                PhotonNetworkManager.Instance.LeaveRoom(LeaveRoomCallback);
-            }
-            */
-            PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
+            PhotonNetworkManager.Instance.LeaveSession(InGameManager.Instance.LeaveRoomCallback);
         }
     }
 
-    private void LeaveRoomCallback()
-    {
-        PhaseManager.Instance.ChangePhase(CommonDefine.Phase.Lobby);
-    }
 }

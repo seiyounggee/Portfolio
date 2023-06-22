@@ -20,8 +20,10 @@ public class MapObject_ChargeZone : MonoBehaviour
 
     [ReadOnly] public List<ChargeInfo> chargeList = new List<ChargeInfo>();
 
-    public float CHARGEZONE_CHARGE_COOLTIME = 0.2f;
-    public int CHARGEZONE_CHARGE_AMOUNT = 3;
+    [ReadOnly] public float CHARGEZONE_CHARGE_COOLTIME = 0.2f;
+    [ReadOnly] public int CHARGEZONE_CHARGE_AMOUNT = 3;
+
+    [ReadOnly] public bool isActive = true;
 
     private void Awake()
     {
@@ -58,12 +60,13 @@ public class MapObject_ChargeZone : MonoBehaviour
     {
         this.id = id;
 
+        CHARGEZONE_CHARGE_COOLTIME = DataManager.Instance.GetGameConfig<float>("chargeZoneChargeCooltime");
+        CHARGEZONE_CHARGE_AMOUNT = DataManager.Instance.GetGameConfig<int>("chargeZoneChargeAmount");
+    }
 
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.chargeZoneData != null)
-        {
-            CHARGEZONE_CHARGE_COOLTIME = DataManager.Instance.basicData.chargeZoneData.CHARGEZONE_CHARGE_COOLTIME;
-            CHARGEZONE_CHARGE_AMOUNT = DataManager.Instance.basicData.chargeZoneData.CHARGEZONE_CHARGE_AMOUNT;
-        }
+    public void ActivateChargeZone(bool isActive)
+    {
+        this.isActive = isActive;
     }
 
     private void Event_OnTriggerEnter(Collider other)
@@ -83,7 +86,7 @@ public class MapObject_ChargeZone : MonoBehaviour
                 if (pm.isStunned || pm.isFlipped || pm.isOutOfBoundary)
                     return;
 
-                if (pm.isEnteredTheFinishLine)
+                if (pm.network_isEnteredTheFinishLine)
                     return;
 
                 var p = chargeList.Find(x => x.pm.Equals(pm));
@@ -94,7 +97,7 @@ public class MapObject_ChargeZone : MonoBehaviour
 
                 if (pm.IsMine)
                 {
-                    networkInGameRPCManager.RPC_SetPlayerBattery(pm.PlayerID, true, CHARGEZONE_CHARGE_AMOUNT, (int)NetworkInGameRPCManager.SetBatteryType.ChargeZone);
+                    networkInGameRPCManager.RPC_SetPlayerBattery(pm.networkPlayerID, true, CHARGEZONE_CHARGE_AMOUNT, (int)NetworkInGameRPCManager.SetBatteryType.ChargeZone);
                 }
 
                 if (pm.playerCar != null)
@@ -125,7 +128,7 @@ public class MapObject_ChargeZone : MonoBehaviour
                 if (pm.isStunned || pm.isFlipped || pm.isOutOfBoundary)
                     return;
 
-                if (pm.isEnteredTheFinishLine)
+                if (pm.network_isEnteredTheFinishLine)
                     return;
 
 
@@ -137,7 +140,7 @@ public class MapObject_ChargeZone : MonoBehaviour
 
                 if (pm.IsMine)
                 {
-                    networkInGameRPCManager.RPC_SetPlayerBattery(pm.PlayerID, true, CHARGEZONE_CHARGE_AMOUNT, (int)NetworkInGameRPCManager.SetBatteryType.ChargeZone);
+                    networkInGameRPCManager.RPC_SetPlayerBattery(pm.networkPlayerID, true, CHARGEZONE_CHARGE_AMOUNT, (int)NetworkInGameRPCManager.SetBatteryType.ChargeZone);
                 }
 
                 if (pm.playerCar != null)
@@ -168,7 +171,7 @@ public class MapObject_ChargeZone : MonoBehaviour
                 if (pm.isStunned || pm.isFlipped || pm.isOutOfBoundary)
                     return;
 
-                if (pm.isEnteredTheFinishLine)
+                if (pm.network_isEnteredTheFinishLine)
                     return;
 
                 var p = chargeList.Find(x => x.pm.Equals(pm));
@@ -186,11 +189,14 @@ public class MapObject_ChargeZone : MonoBehaviour
         if (id == -1)
             return true;
 
+        if (isActive == false)
+            return true;
+
         if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
             return true;
 
         if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-        || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
+        || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
         || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
         || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
             return true;

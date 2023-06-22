@@ -110,6 +110,38 @@ public class PrefabManager : MonoSingleton<PrefabManager>
         }
     }
 
+    public GameObject NetworkPlayer_AI
+    {
+        get
+        {
+            string path = "Prefabs/InGame/NetworkPlayer_AI";
+            UnityEngine.Object obj = UnityEngine.Resources.Load(path);
+            if (obj == null)
+            {
+                Debug.LogError("load failed : " + path);
+                return null;
+            }
+
+            return (GameObject)obj;
+        }
+    }
+
+    public GameObject PlayerCar_FX
+    {
+        get
+        {
+            string path = "Prefabs/InGame/PlayerCar_FX";
+            UnityEngine.Object obj = UnityEngine.Resources.Load(path);
+            if (obj == null)
+            {
+                Debug.LogError("load failed : " + path);
+                return null;
+            }
+
+            return (GameObject)obj;
+        }
+    }
+
     public GameObject NetworkInGameRPCManager
     {
         get
@@ -142,11 +174,27 @@ public class PrefabManager : MonoSingleton<PrefabManager>
         }
     }
 
-    public GameObject OutGameFloor
+    public GameObject DummyPlayer
     {
         get
         {
-            string path = "Prefabs/OutGame/OutGameFloor";
+            string path = "Prefabs/Common/DummyPlayer";
+            UnityEngine.Object obj = UnityEngine.Resources.Load(path);
+            if (obj == null)
+            {
+                Debug.LogError("load failed : " + path);
+                return null;
+            }
+
+            return (GameObject)obj;
+        }
+    }
+
+    public GameObject OutGameBackground
+    {
+        get
+        {
+            string path = "Prefabs/OutGame/OutGameBackground";
             UnityEngine.Object obj = UnityEngine.Resources.Load(path);
             if (obj == null)
             {
@@ -289,11 +337,43 @@ public class PrefabManager : MonoSingleton<PrefabManager>
     }
     #endregion
 
-    public GameObject ChargePad
+    public GameObject MapObject_ChargePad
     {
         get
         {
-            string path = "Prefabs/InGame/ChargePad";
+            string path = "Prefabs/InGame/MapObject_ChargePad";
+            UnityEngine.Object obj = UnityEngine.Resources.Load(path);
+            if (obj == null)
+            {
+                Debug.LogError("load failed : " + path);
+                return null;
+            }
+
+            return (GameObject)obj;
+        }
+    }
+
+    public GameObject MapObject_Obstacle
+    {
+        get
+        {
+            string path = "Prefabs/InGame/MapObject_Obstacle";
+            UnityEngine.Object obj = UnityEngine.Resources.Load(path);
+            if (obj == null)
+            {
+                Debug.LogError("load failed : " + path);
+                return null;
+            }
+
+            return (GameObject)obj;
+        }
+    }
+
+    public GameObject MapObject_TimingPad
+    {
+        get
+        {
+            string path = "Prefabs/InGame/MapObject_TimingPad";
             UnityEngine.Object obj = UnityEngine.Resources.Load(path);
             if (obj == null)
             {
@@ -380,28 +460,28 @@ public class PrefabManager : MonoSingleton<PrefabManager>
 
     private UI_PanelIngame ui_PanelIngame = null;
 
-    public UI_PanelLobby_Menu UI_PanelLobby_Menu
+    public UI_PanelLobby_TabMenu UI_PanelLobby_TabMenu
     {
         get
         {
-            if (ui_PanelLobby_Menu == null)
+            if (ui_PanelLobby_TabMenu == null)
             {
-                GameObject pObj = InstantiateUIPrefab("UI/PanelLobby_Menu", ngui_parent, Vector3.zero);
+                GameObject pObj = InstantiateUIPrefab("UI/New/PanelLobby_TabMenu", ngui_parent, Vector3.zero);
                 if (pObj != null)
                 {
-                    ui_PanelLobby_Menu = pObj.GetComponent<UI_PanelLobby_Menu>();
-                    if (ui_PanelLobby_Menu == null)
-                        Debug.LogError("No UI_PanelLobby_Menu Script Attached!");
+                    ui_PanelLobby_TabMenu = pObj.GetComponent<UI_PanelLobby_TabMenu>();
+                    if (ui_PanelLobby_TabMenu == null)
+                        Debug.LogError("No UI_PanelLobby_TabMenu Script Attached!");
                 }
                 else
-                    Debug.LogError("Not Found UI_PanelLobby_Menu");
+                    Debug.LogError("Not Found UI_PanelLobby_TabMenu");
             }
 
-            return ui_PanelLobby_Menu;
+            return ui_PanelLobby_TabMenu;
         }
     }
 
-    private UI_PanelLobby_Menu ui_PanelLobby_Menu = null;
+    private UI_PanelLobby_TabMenu ui_PanelLobby_TabMenu = null;
 
     public UI_PanelLobby_Garage UI_PanelLobby_Garage
     {
@@ -455,7 +535,7 @@ public class PrefabManager : MonoSingleton<PrefabManager>
         {
             if (ui_PanelLobby_Main == null)
             {
-                GameObject pObj = InstantiateUIPrefab("UI/PanelLobby_Main", ngui_parent, Vector3.zero);
+                GameObject pObj = InstantiateUIPrefab("UI/New/PanelLobby_Main", ngui_parent, Vector3.zero);
                 if (pObj != null)
                 {
                     ui_PanelLobby_Main = pObj.GetComponent<UI_PanelLobby_Main>();
@@ -564,28 +644,28 @@ public class PrefabManager : MonoSingleton<PrefabManager>
 
     private UI_PanelLoading ui_PanelLoading = null;
 
-    public UI_PanelCommon UI_PanelCommon
+    public UI_PanelPopup_Default UI_PanelPopup_Default
     {
         get
         {
-            if (ui_PanelCommon == null)
+            if (ui_PanelPopup_Default == null)
             {
-                GameObject pObj = InstantiateUIPrefab("UI/PanelCommon", ngui_parent, Vector3.zero);
+                GameObject pObj = InstantiateUIPrefab("UI/New/PanelPopup_Default", ngui_parent, Vector3.zero);
                 if (pObj != null)
                 {
-                    ui_PanelCommon = pObj.GetComponent<UI_PanelCommon>();
-                    if (ui_PanelCommon == null)
-                        Debug.LogError("No UI_PanelCommon Script Attached!");
+                    ui_PanelPopup_Default = pObj.GetComponent<UI_PanelPopup_Default>();
+                    if (ui_PanelPopup_Default == null)
+                        Debug.LogError("No UI_PanelPopup_Default Script Attached!");
                 }
                 else
-                    Debug.LogError("Not Found UI_PanelCommon");
+                    Debug.LogError("Not Found UI_PanelPopup_Default");
             }
 
-            return ui_PanelCommon;
+            return ui_PanelPopup_Default;
         }
     }
 
-    private UI_PanelCommon ui_PanelCommon = null;
+    private UI_PanelPopup_Default ui_PanelPopup_Default = null;
 
     public UI_PanelDebugTool UI_PanelDebugTool
     {
@@ -634,41 +714,75 @@ public class PrefabManager : MonoSingleton<PrefabManager>
 
     private UI_PanelNickname ui_PanelNickname = null;
 
-
-    #endregion
-
-
-    #region Photon
-    /*
-    public static GameObject InstantiatePhotonObj(string name, Vector3 posi, Quaternion quat, byte by)
+    public UI_PanelTouchDefence UI_PanelTouchDefence
     {
-        string path = "Prefabs/InGame/" + name;
-        UnityEngine.Object obj = UnityEngine.Resources.Load(path);
-        if (obj == null)
+        get
         {
-            Debug.LogWarning("No Exsiting obj named : " + name);
-            return null;
+            if (ui_PanelTouchDefence == null)
+            {
+                GameObject pObj = InstantiateUIPrefab("UI/PanelTouchDefence", ngui_parent, Vector3.zero);
+                if (pObj != null)
+                {
+                    ui_PanelTouchDefence = pObj.GetComponent<UI_PanelTouchDefence>();
+                    if (ui_PanelTouchDefence == null)
+                        Debug.LogError("No UI_PanelTouchDefence Script Attached!");
+                }
+                else
+                    Debug.LogError("Not Found UI_PanelTouchDefence");
+            }
+
+            return ui_PanelTouchDefence;
         }
-
-        GameObject instantiatedGO = PhotonNetwork.Instantiate(path, posi, quat, by);
-
-        return instantiatedGO;
     }
 
-    public static GameObject InstantiateRoomPhotonObj(string name, Vector3 posi, Quaternion quat, byte by)
+    private UI_PanelTouchDefence ui_PanelTouchDefence = null;
+
+
+    public UI_PanelPopup_Drone UI_PanelPopup_Drone
     {
-        string path = "Prefabs/InGame/" + name;
-        UnityEngine.Object obj = UnityEngine.Resources.Load(path);
-        if (obj == null)
+        get
         {
-            Debug.LogWarning("No Exsiting obj named : " + name);
-            return null;
+            if (ui_PanelPopup_Drone == null)
+            {
+                GameObject pObj = InstantiateUIPrefab("UI/New/PanelPopup_Drone", ngui_parent, Vector3.zero);
+                if (pObj != null)
+                {
+                    ui_PanelPopup_Drone = pObj.GetComponent<UI_PanelPopup_Drone>();
+                    if (ui_PanelPopup_Drone == null)
+                        Debug.LogError("No UI_PanelPopup_Drone Script Attached!");
+                }
+                else
+                    Debug.LogError("Not Found UI_PanelPopup_Drone");
+            }
+
+            return ui_PanelPopup_Drone;
         }
-
-        GameObject instantiatedGO = PhotonNetwork.InstantiateRoomObject(path, posi, quat, by);
-
-        return instantiatedGO;
     }
-    */
+
+    private UI_PanelPopup_Drone ui_PanelPopup_Drone = null;
+
+    public UI_PanelPopup_RewardBoxInfo UI_PanelPopup_RewardBoxInfo
+    {
+        get
+        {
+            if (ui_PanelPopup_RewardBoxInfo == null)
+            {
+                GameObject pObj = InstantiateUIPrefab("UI/New/PanelPopup_RewardBoxInfo", ngui_parent, Vector3.zero);
+                if (pObj != null)
+                {
+                    ui_PanelPopup_RewardBoxInfo = pObj.GetComponent<UI_PanelPopup_RewardBoxInfo>();
+                    if (ui_PanelPopup_RewardBoxInfo == null)
+                        Debug.LogError("No UI_PanelPopup_RewardBoxInfo Script Attached!");
+                }
+                else
+                    Debug.LogError("Not Found UI_PanelPopup_RewardBoxInfo");
+            }
+
+            return ui_PanelPopup_RewardBoxInfo;
+        }
+    }
+
+    private UI_PanelPopup_RewardBoxInfo ui_PanelPopup_RewardBoxInfo = null;
+
     #endregion
 }

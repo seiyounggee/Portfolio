@@ -15,7 +15,7 @@ public class PlayerTriggerChecker : MonoBehaviour
     [Serializable]
     public class CollisionDelayInfo
     {
-        public int viewID;
+        public Fusion.NetworkId networkID;
         public float delayCooltime = 0.5f;
         public bool isCollisionAvailable { get { if (delayCooltime <= 0f) return true; else return false; } }
     }
@@ -26,6 +26,8 @@ public class PlayerTriggerChecker : MonoBehaviour
 
     public bool isCollisionUsed = true; //Collision check 사용하는지
     private bool isCollisionActivated = false; //Collision 사용했는지 여부
+
+    private NetworkInGameRPCManager rpcManager => PhotonNetworkManager.Instance.MyNetworkInGameRPCManager;
 
     public void Initialize()
     {
@@ -43,8 +45,7 @@ public class PlayerTriggerChecker : MonoBehaviour
         else
             isCollisionUsed = true;
 
-        if (DataManager.Instance.basicData != null && DataManager.Instance.basicData.playerData != null)
-            PLAYER_COLLISION_DELAY_COOLTIME = DataManager.Instance.basicData.playerData.PLAYER_COLLISION_DELAY_COOLTIME;
+        PLAYER_COLLISION_DELAY_COOLTIME = DataManager.Instance.GetGameConfig<float>("playerCollisionDelayCooltime");
     }
 
     private void Awake()
@@ -80,7 +81,7 @@ public class PlayerTriggerChecker : MonoBehaviour
             return;
 
         if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-            || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
+            || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
             || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
             || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
             return;
@@ -89,11 +90,11 @@ public class PlayerTriggerChecker : MonoBehaviour
         if (other.CompareTag(CommonDefine.TAG_NetworkPlayer_TriggerChecker))
         {
             var cc = other.GetComponent<PlayerTriggerChecker>();
-            if (cc != null && cc.pm != null)
+            if (cc != null && cc.pm != null && cc.pm.networkPlayerID != null)
             {
-                if (cc.pm.PlayerID != pm.PlayerID)
+                if (cc.pm.networkPlayerID != pm.networkPlayerID)
                 {
-                    var o = listOfCollision.Find(x => x.PlayerID.Equals(cc.pm.PlayerID));
+                    var o = listOfCollision.Find(x => x.networkPlayerID.Equals(cc.pm.networkPlayerID));
                     if (o == null)
                         listOfCollision.Add(cc.pm);
                 }
@@ -102,12 +103,12 @@ public class PlayerTriggerChecker : MonoBehaviour
             if (currentCheckParts == CheckParts.Front)
             {
                 var otherCC = other.GetComponent<PlayerTriggerChecker>();
-                if (otherCC != null && otherCC.pm != null && otherCC.pm.PlayerID != pm.PlayerID)
+                if (otherCC != null && otherCC.pm != null && otherCC.pm.networkPlayerID != pm.networkPlayerID)
                 {
                     if (isCollisionUsed == true)
                     {
                         //내가 수비하고 있지 않거나 2,3단계 부스팅 상태에서만 공격!!
-                        if (pm.isDecelerating == false && pm.isCarAttackBoosting == true)
+                        if (pm.isShield == false && pm.isCarAttackBoosting == true)
                         {
                             HitOtherPlayer(otherCC);
                             isCollisionActivated = true;
@@ -126,7 +127,7 @@ public class PlayerTriggerChecker : MonoBehaviour
                         case CheckParts.Body:
                             {
                                 if (pm.IsPlayerInFront == false)
-                                    pm.RaiseRPC_PlayerIsInFrontTrue(otherCC.pm.PlayerID);
+                                    rpcManager.RPC_PlayerIsInFrontFalse(pm.networkPlayerID, otherCC.pm.networkPlayerID);
                             }
                             break;
                     }
@@ -144,7 +145,7 @@ public class PlayerTriggerChecker : MonoBehaviour
             return;
 
         if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-            || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
+            || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
             || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
             || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
             return;
@@ -153,11 +154,11 @@ public class PlayerTriggerChecker : MonoBehaviour
         if (other.CompareTag(CommonDefine.TAG_NetworkPlayer_TriggerChecker))
         {
             var cc = other.GetComponent<PlayerTriggerChecker>();
-            if (cc != null && cc.pm != null)
+            if (cc != null && cc.pm != null && cc.pm.networkPlayerID != null)
             {
-                if (cc.pm.PlayerID != pm.PlayerID)
+                if (cc.pm.networkPlayerID != pm.networkPlayerID)
                 {
-                    var o = listOfCollision.Find(x => x.PlayerID.Equals(cc.pm.PlayerID));
+                    var o = listOfCollision.Find(x => x.networkPlayerID.Equals(cc.pm.networkPlayerID));
                     if (o == null)
                         listOfCollision.Add(cc.pm);
                 }
@@ -171,7 +172,7 @@ public class PlayerTriggerChecker : MonoBehaviour
                     {
                         if (isCollisionUsed == true)
                         {
-                            if (pm != null && pm.isDecelerating == false && pm.isCarAttackBoosting == true)
+                            if (pm != null && pm.isShield == false && pm.isCarAttackBoosting == true)
                             {
                                 HitOtherPlayer(otherCC);
                                 isCollisionActivated = true;
@@ -191,7 +192,7 @@ public class PlayerTriggerChecker : MonoBehaviour
             return;
 
         if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-            || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
+            || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
             || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
             || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
             return;
@@ -200,9 +201,9 @@ public class PlayerTriggerChecker : MonoBehaviour
         if (other.CompareTag(CommonDefine.TAG_NetworkPlayer_TriggerChecker))
         {
             var cc = other.GetComponent<PlayerTriggerChecker>();
-            if (cc != null && cc.pm != null)
+            if (cc != null && cc.pm != null && cc.pm.networkPlayerID != null)
             {
-                var o = listOfCollision.Find(x => x.PlayerID.Equals(cc.pm.PlayerID));
+                var o = listOfCollision.Find(x => x.networkPlayerID.Equals(cc.pm.networkPlayerID));
                 if (o != null)
                     listOfCollision.Remove(o);
 
@@ -213,7 +214,7 @@ public class PlayerTriggerChecker : MonoBehaviour
                     if (otherCC != null && otherCC.pm != null)
                     {
                         if (pm.IsPlayerInFront == true && pm.IsMine)
-                            pm.RaiseRPC_PlayerIsInFrontFalse();
+                            rpcManager.RPC_PlayerIsInFrontFalse(pm.networkPlayerID);
                     }
 
                     isCollisionActivated = false;
@@ -231,19 +232,23 @@ public class PlayerTriggerChecker : MonoBehaviour
                 {
                     if (pm.IsMine)
                     {
+                        //왼쪽 오른쪽 공격은 chaningLane의 경우에만 공격했다고 판정하자!
+                        if (pm.network_isChangingLane == false)
+                            return;
+
                         var otherNO = otherCC.pm.networkObject;
-                        var c = listOfCollisionDelayInfo.Find(x => x.viewID.Equals(otherCC.pm.PlayerID));
+                        var c = listOfCollisionDelayInfo.Find(x => x.networkID.Equals(otherCC.pm.networkPlayerID));
                         if (c == null)
                         {
-                            pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
-                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { viewID = otherCC.pm.PlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
+                            rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
+                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { networkID = otherCC.pm.networkPlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
                         }
                         else
                         {
                             if (c.isCollisionAvailable)
                             {
                                 c.delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME;
-                                pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
+                                rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
                             }
                             else
                             {
@@ -258,19 +263,23 @@ public class PlayerTriggerChecker : MonoBehaviour
                 {
                     if (pm.IsMine)
                     {
+                        //왼쪽 오른쪽 공격은 chaningLane의 경우에만 공격했다고 판정하자!
+                        if (pm.network_isChangingLane == false)
+                            return;
+
                         var otherNO = otherCC.pm.networkObject;
-                        var c = listOfCollisionDelayInfo.Find(x => x.viewID.Equals(otherCC.pm.PlayerID));
+                        var c = listOfCollisionDelayInfo.Find(x => x.networkID.Equals(otherCC.pm.networkPlayerID));
                         if (c == null)
                         {
-                            pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
-                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { viewID = otherCC.pm.PlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
+                            rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
+                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { networkID = otherCC.pm.networkPlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
                         }
                         else
                         {
                             if (c.isCollisionAvailable)
                             {
                                 c.delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME;
-                                pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
+                                rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
                             }
                             else
                             {
@@ -287,18 +296,18 @@ public class PlayerTriggerChecker : MonoBehaviour
                     if (pm.IsMine)
                     {
                         var otherNO = otherCC.pm.networkObject;
-                        var c = listOfCollisionDelayInfo.Find(x => x.viewID.Equals(otherCC.pm.PlayerID));
+                        var c = listOfCollisionDelayInfo.Find(x => x.networkID.Equals(otherCC.pm.networkPlayerID));
                         if (c == null)
                         {
-                            pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
-                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { viewID = otherCC.pm.PlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
+                            rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
+                            listOfCollisionDelayInfo.Add(new CollisionDelayInfo() { networkID = otherCC.pm.networkPlayerID, delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME });
                         }
                         else
                         {
                             if (c.isCollisionAvailable)
                             {
                                 c.delayCooltime = PLAYER_COLLISION_DELAY_COOLTIME;
-                                pm.RaiseRPC_PlayerTriggerEnterOtherPlayer(otherNO, otherCC.currentCheckParts, otherCC.pm.currentMoveSpeed, this);
+                                rpcManager.RPC_TriggerEnterOtherPlayer(otherCC.pm.networkPlayerID, this.pm.networkPlayerID, otherCC.currentCheckParts);
                             }
                             else
                             {

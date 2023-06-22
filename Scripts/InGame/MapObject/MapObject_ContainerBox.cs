@@ -12,7 +12,7 @@ public class MapObject_ContainerBox : MonoBehaviour
     [SerializeField] Animation anim = null;
     [SerializeField] TriggerChecker triggerChecker = null;
 
-
+    private NetworkInGameRPCManager rpcManager => PhotonNetworkManager.Instance.MyNetworkInGameRPCManager;
 
     public enum MovingType { None, LeftAndRight, UpDown }
     public MovingType movingType = MovingType.None;
@@ -25,7 +25,7 @@ public class MapObject_ContainerBox : MonoBehaviour
         public bool isHitAvailable { get { if (counter <= 0) return true; else return false; } }
     }
 
-    [ReadOnly] public List<HitDelayInfo> hitDelayList = new List<HitDelayInfo>();
+    [HideInInspector] private List<HitDelayInfo> hitDelayList = new List<HitDelayInfo>();
 
 
     private void Awake()
@@ -54,23 +54,24 @@ public class MapObject_ContainerBox : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-        || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
-        || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
-        || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
+        if (IsActiveCondition() == false)
         {
-            hitDelayList.Clear();
+            if (hitDelayList != null && hitDelayList.Count > 0)
+                hitDelayList.Clear();
             return;
         }
-
-        if (hitDelayList != null && hitDelayList.Count > 0)
+        else
         {
-            foreach (var i in hitDelayList)
+            if (hitDelayList != null && hitDelayList.Count > 0)
             {
-                if (i.isHitAvailable == false)
-                    i.counter -= Time.fixedDeltaTime;
+                foreach (var i in hitDelayList)
+                {
+                    if (i.isHitAvailable == false)
+                        i.counter -= Time.fixedDeltaTime;
+                }
             }
         }
+
     }
 
     public void SetData(int index)
@@ -80,10 +81,7 @@ public class MapObject_ContainerBox : MonoBehaviour
 
     public void ActivateContainerBox()
     {
-        if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-            || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
-            || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
-            || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
+        if (IsActiveCondition() == false)
             return;
 
         switch (movingType)
@@ -105,7 +103,7 @@ public class MapObject_ContainerBox : MonoBehaviour
 
     private void Event_OnTriggerEnter(Collider other)
     {
-        if (IsBlockEvent())
+        if (IsActiveCondition() == false)
             return;
 
         if (other.CompareTag(CommonDefine.TAG_NetworkPlayer_TriggerChecker))
@@ -134,7 +132,12 @@ public class MapObject_ContainerBox : MonoBehaviour
                     case MovingType.LeftAndRight:
                         {
                             if (pm.IsMine)
-                                pm.RaiseRPC_GetFlipped(pm.networkObject, pm.transform.position, pm.transform.rotation);
+                            {
+                                if (pm.isShield)
+                                    rpcManager.RPC_StopShield(pm.networkPlayerID);
+
+                                rpcManager.RPC_GetFlipped(pm.networkPlayerID, pm.transform.position, pm.transform.rotation);
+                            }
 
                             InGameManager.Instance.ActivateFX(InGameManager.FX_Type.Hit_02, pm.transform.position);
 
@@ -148,7 +151,12 @@ public class MapObject_ContainerBox : MonoBehaviour
                     case MovingType.UpDown:
                         {
                             if (pm.IsMine)
-                                pm.RaiseRPC_GetFlipped(pm.networkObject, pm.transform.position, pm.transform.rotation);
+                            {
+                                if (pm.isShield)
+                                    rpcManager.RPC_StopShield(pm.networkPlayerID);
+
+                                rpcManager.RPC_GetFlipped(pm.networkPlayerID, pm.transform.position, pm.transform.rotation);
+                            }
 
                             InGameManager.Instance.ActivateFX(InGameManager.FX_Type.Hit_02, pm.transform.position);
 
@@ -166,27 +174,27 @@ public class MapObject_ContainerBox : MonoBehaviour
 
     private void Event_OnTriggerStay(Collider other)
     {
-        if (IsBlockEvent())
+        if (IsActiveCondition() == false)
             return;
     }
 
     private void Event_OnTriggerExit(Collider other)
     {
-        if (IsBlockEvent())
+        if (IsActiveCondition() == false)
             return;
     }
 
-    private bool IsBlockEvent()
+    private bool IsActiveCondition()
     {
         if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
-            return true;
+            return false;
 
         if (InGameManager.Instance.gameState == InGameManager.GameState.Initialize
-        || InGameManager.Instance.gameState == InGameManager.GameState.IsReady
+        || InGameManager.Instance.gameState == InGameManager.GameState.IsGameReady
         || InGameManager.Instance.gameState == InGameManager.GameState.StartCountDown
         || InGameManager.Instance.gameState == InGameManager.GameState.EndGame)
-            return true;
-        else
             return false;
+        else
+            return true;
     }
 }

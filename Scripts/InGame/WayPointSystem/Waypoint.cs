@@ -42,8 +42,9 @@ namespace WayPointSystem
     {
         // OFFSET position to parent WaypointsGroup; 
         // Use GETPOSITION to read properly (as it depends on the PositionConstraint of the WaypointGroup parent)
-        public Vector3 position;
+        [SerializeField] public Vector3 position;
 
+        [SerializeField]
         [HideInInspector]
         public Quaternion rotation = Quaternion.identity;
 
@@ -64,21 +65,35 @@ namespace WayPointSystem
         public Vector3 XY
         {
             get { return xyPosition; }
+            set { xyPosition = value; }
         }
 
         public Vector3 XYZ
         {
-            get { return xyzPosition; }
+            get { return xyzPosition; } 
+            set { xyzPosition = value; }
         }
         public Vector3 XZ
         {
             get { return xzPosition; }
+            set { xzPosition = value; }
         }
 
-        [SerializeField] public enum WayPointType { Normal, Blocked, OutOfBoundary}
+        [SerializeField] public enum WayPointType 
+        { 
+            Normal,
+            Blocked,
+            OutOfBoundary, 
+            OnlyFront,
+            Sky
+        }
+
         [SerializeField] public WayPointType currentWayPointType = WayPointType.Normal;
 
-        public int index = -1;
+        [SerializeField] public int index = -1;
+        [SerializeField] public int laneNumber = -1;
+
+        [SerializeField] public int verticesNumber = -1;
 
         public void SetWaypointGroup(WaypointsGroup wpg)
         {
@@ -93,8 +108,8 @@ namespace WayPointSystem
             xzPosition = other.XZ;
             xyzPosition = other.XYZ;
 
-            Debug.Log(other.XYZ);
-            Debug.Log(xyzPosition);
+            laneNumber = other.laneNumber;
+            currentWayPointType = other.currentWayPointType;
         }
 
         public Vector3 GetPosition(PositionConstraint constraint=PositionConstraint.XYZ)
@@ -145,7 +160,7 @@ namespace WayPointSystem
         }
 
         //지정...!
-        public void SetPosition(Vector3 newPos, PositionConstraint constraint)
+        public void SetPosition(Vector3 newPos, PositionConstraint constraint = PositionConstraint.XYZ)
         {
             xyPosition.x = newPos.x;
             xzPosition.x = newPos.x;

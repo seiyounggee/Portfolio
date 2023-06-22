@@ -40,8 +40,11 @@ public class PhaseLobby : PhaseBase
 
         yield return null;
 
-        PhotonNetworkManager.Instance.InitializeNetworkMatchSettings();
-        PrefabManager.Instance.UI_PanelIngame.Initialize(); //Ingame씬에서 온경우... 지워주자...
+        PhotonNetworkManager.Instance.ResetNetworkMatchSettings();
+        InGameManager.Instance.InitializeInGameUI(); //Ingame씬에서 온경우... 지워주자...
+        OutGameManager.Instance.InitializeOutGameUI();
+
+        RobotSystemManager.Instance.ActivateSearchRobotTimer();
 
         bool allSceneIsLoaded = false;
         while (true)
@@ -68,18 +71,17 @@ public class PhaseLobby : PhaseBase
         Camera_Base.Instance.InitializeSettings();
         CameraManager.Instance.SetOutGameCam();
         yield return null;
-        CameraManager.Instance.ChangeCamType(CameraManager.CamType.OutGame_LookAt);
-
+        OutGameManager.Instance.SetOutGamePlayerData();
+        yield return null;
+        OutGameManager.Instance.ActivateOutGamePlayerAndCam();
         yield return null;
 
         UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelInGame);
         UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelSprite);
         UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelLoading);
 
-        UIManager_NGUI.Instance.ActivateLobbyUI(UIManager_NGUI.UIType.UI_PanelLobby_Main);
-
-        OutGameManager.Instance.SetOutGamePlayerData();
-        PrefabManager.Instance.UI_PanelLobby_Main.SetOutGameData();
+        UIManager_NGUI.Instance.ActivateUI(UIManager_NGUI.UIType.UI_PanelLobby_Main);
+        UIManager_NGUI.Instance.ActivateUI(UIManager_NGUI.UIType.UI_PanelLobby_TabMenu);
 
         SoundManager.Instance.StopSound(SoundManager.SoundClip.Drive);
         SoundManager.Instance.PlaySound_BGM(SoundManager.SoundClip.Outgame_BGM);

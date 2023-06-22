@@ -8,6 +8,15 @@ public class SoundManager : MonoSingleton<SoundManager>
     public List<SoundClipInfo> soundList = new List<SoundClipInfo>();
     public List<SoundClipInfo> bgmPlayList = new List<SoundClipInfo>();
 
+    [Header("Drive Information")]
+    [ReadOnly] [Range(0, 100f)] public float player_speed = 0f;
+    [ReadOnly] [Range(-3f, 3f)] public float drive_pitch = 0f;
+
+    [Header("Drive Pitch Settings ")]
+    [Range(-3f, 3f)] public float drive_MAX_pitch = 1.7f;
+    [Range(-3f, 3f)] public float drive_MIN_pitch = 0.45f;
+
+
     [Serializable]
     public class SoundClipInfo
     {

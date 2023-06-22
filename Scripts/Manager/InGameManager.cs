@@ -3,16 +3,20 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using Fusion;
+using System;
+using System.Runtime.InteropServices;
+using DTR.Shared;
+using UnityEngine.TextCore.Text;
 
-
-public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager>
+public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager>, IEventBus<InGameManager.GameState>
 {
+    [Header("[InGame Base]")]
     [ReadOnly] public PlayerMovement myPlayer = null;
     [ReadOnly] public WayPointSystem.WaypointsGroup wayPoints = null;
     [ReadOnly] public MapObjectManager mapObjectManager = null;
     private PhotonNetworkManager photonNetworkManager => PhotonNetworkManager.Instance;
     private NetworkRunner myNetworkRunner => photonNetworkManager.MyNetworkRunner;
-    private NetworkInGameRPCManager myNetworkInGameRPCManager => photonNetworkManager.MyNetworkInGameRPCManager;
+    private NetworkInGameRPCManager networkInGameRPCManager => photonNetworkManager.MyNetworkInGameRPCManager;
 
     public IEnumerator gameRoutine = null;
     public IEnumerator updateNetworkPlayerList = null;
@@ -21,11 +25,11 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     public IEnumerator updateMapObjectList = null;
     public IEnumerator updatePingInfo = null;
 
-    public enum GameState { Initialize, IsReady, StartCountDown, PlayGame, EndCountDown, EndGame }
+    public enum GameState { Initialize, IsGameReady, StartCountDown, PlayGame, EndCountDown, EndGame }
     [ReadOnly] public GameState gameState;
 
     public enum GameMode { Solo, Team }
-    [ReadOnly] public GameMode gameMode = GameMode.Solo; //TODO...
+    [ReadOnly] public GameMode gameMode = GameMode.Solo;
 
     [System.Serializable]
     public class PlayerInfo
@@ -33,83 +37,96 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         public GameObject go;
         public PlayerMovement pm;
         public PlayerData data = new PlayerData();
-        public int playerID { get { if (pm != null) return pm.PlayerID; else return -1; }}
+        public CRacerInfo racerInfo { get { if (Instance.allRacerInfo != null && Instance.allRacerInfo.Count > 0) return Instance.allRacerInfo.Find(x => x.ActorID.Equals(this.PID)); else return null; } }
+        public long PID { get{ if (pm != null) return pm.network_PID; else return 0; } }
+        public NetworkId photonNetworkID { get { if (pm != null && pm.networkPlayerID != null) return pm.networkPlayerID; else return new NetworkId(); } }
         public float distLeft { get { if (pm != null) return pm.GetMinDistLeft(); else return -1f; } }
-        public int currentLap { get { if (pm != null) return pm.currentLap; else return -1; } }
+        public int currentLap { get { if (pm != null) return pm.network_currentLap; else return -1; } }
 
         public int currentRank { get { if (pm != null) return pm.currentRank; else return -1; } }
+        public bool isAI { get { if (pm != null) return pm.IsAI; else return false; } }
 
-        public bool isEnterFinishLine_Local { get { if (pm != null) return pm.isEnteredTheFinishLine; else return false; } }
+        public bool isEnterFinishLine_Local { get { if (pm != null) return pm.network_isEnteredTheFinishLine; else return false; } }
 
         public bool isEnterFinishLine_Network = false; //EVENT_PassedFinishLine에 의해 설정되는 값... 위에 pm이 null되는 경우때문에 network 변수로 관리
 
-        public double enterFinishLineTime_Network = 0; //EVENT_PassedFinishLine에 의해 설정되는 값
+        public float enterFinishLineTime_Network = 0; //EVENT_PassedFinishLine에 의해 설정되는 값
+
+        public bool isRetire { get { if (isEnterFinishLine_Network == false && InGameManager.Instance.isGameEnded) return true; else return false; }  }
 
         public float distanceBetweenMyPlayer { get { if (pm != null) return pm.GetDistBetweenMyPlayer(); else return 0f; } }
+        public bool isSetToPosition { get { if (pm != null) return pm.isSetToPosition; else return false; } }
 
-        public bool isReady = false;
     }
 
     //플레이어가 나가면 ListOfPlayers count는 유지됨!! go & pm 은 null이 됨
     [ReadOnly] public List<PlayerInfo> ListOfPlayers = new List<PlayerInfo>();
+    public List<PlayerInfo> ListOfAIPlayers { get { return ListOfPlayers.FindAll(x => x != null && x.pm != null && x.isAI); } }
 
+    public List<CRacerInfo> allRacerInfo = new List<CRacerInfo>();
+    public List<CRacerInfo> playerAckData = new List<CRacerInfo>();
+    public List<CRacerInfo> aiAckData = new List<CRacerInfo>();
+    public CRacerInfo myRacerInfo { get { if (allRacerInfo != null) return allRacerInfo.Find(x => x.ActorID.Equals(AccountManager.Instance.PID)); else return null; } }
+    
+    public int totalPlayerCount { get { if (playerAckData != null && aiAckData != null) return playerAckData.Count + aiAckData.Count; else return 9999; } }
 
-    [ReadOnly] public List<PlayerInfo> ListOfPlayerBehind= new List<PlayerInfo>(); //뒤쪽에 있는 player list...
+    [ReadOnly] public List<PlayerInfo> ListOfPlayerBehind = new List<PlayerInfo>(); //뒤쪽에 있는 player list...
+
+    #region JSON용 Class
+    [System.Serializable] 
+    public class PlayerDataList 
+    {
+        [SerializeField] public List<PlayerData> listOfPlayerData;
+
+        public PlayerDataList()
+        {
+            listOfPlayerData = new List<PlayerData>();
+        }
+    }
+    #endregion
 
     [System.Serializable]
     public class PlayerData
     {
-        [SerializeField] public string UserId;
+        [SerializeField] public long PID;
         [SerializeField] public string ownerNickName;
-        [SerializeField] public int playerId;
+        [SerializeField] public NetworkId photonNetworkId;
         [SerializeField] public int carID;
+        [SerializeField] public int carLevel;
         [SerializeField] public int characterID;
+        [SerializeField] public int aiType;
 
         //추후에... 추가 정보 넣자...!
         //TODO....
     }
 
-    public bool isPlayGame = false;
-    public bool isStartCountDown = false;
-    public double playStartTime;
+    [ReadOnly] public bool isPlayGame = false;
+    [ReadOnly] public bool isStartCountDown = false;
 
-    public bool playerIsSetInPosition = false;
-    public bool myPlayerDataIsSent = false;
+    [ReadOnly] public bool isAllPlayerSetInPosition = false;
+    [ReadOnly] public bool myPlayerDataIsSent = false;
 
     public double totalTimeGameElapsed
     {
         get
         {
-            if (myNetworkInGameRPCManager != null)
-                return (myNetworkInGameRPCManager.EndRaceTick - myNetworkInGameRPCManager.StartRaceTick) * PhotonNetworkManager.Instance.MyNetworkRunner.DeltaTime;
-            else
-                return 0f;
-        }
-    }
-    
-    public double myTimeRecordElapsed
-    {
-        get
-        {
-            if (myNetworkInGameRPCManager != null)
-                return (myNetworkRunner.Simulation.Tick - myNetworkInGameRPCManager.StartRaceTick) * PhotonNetworkManager.Instance.MyNetworkRunner.DeltaTime;
+            if (myPlayer != null)
+                return (myPlayer.Runner.Tick - startRaceTick) * myPlayer.Runner.DeltaTime;
             else
                 return 0f;
         }
     }
 
-    public bool isEndCountStarted = false;
-    public bool isGameEnded = false;
-    public bool isInputDelay = false;
-
-    public bool IsHost { get { return PhotonNetworkManager.Instance.IsHost; } }
+    [ReadOnly] public bool isEndCountStarted = false;
+    [ReadOnly] public bool isGameEnded = false;
+    [ReadOnly] public bool isInputDelay = false;
 
     public bool myPlayerPassedFinishLine
     {
         get
         {
-            if (myPlayer != null)
-                return myPlayer.isEnteredTheFinishLine;
+            if (myPlayer != null&& myPlayer.isSpawned)
+                return myPlayer.network_isEnteredTheFinishLine;
 
             return false;
         }
@@ -131,7 +148,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         {
             if (ListOfPlayers != null && ListOfPlayers.Count > 0 && myPlayer != null)
             {
-                var p = ListOfPlayers.Find(x => x.playerID.Equals(myPlayer.PlayerID));
+                var p = ListOfPlayers.Find(x => x.photonNetworkID.Equals(myPlayer.networkPlayerID));
                 return p;
             }
 
@@ -139,24 +156,24 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         }
     }
 
-    public int myPlayerPlayerID
+    public NetworkId myPlayerPlayerID
     {
         get
         {
             if (myPlayer != null)
-                return myPlayer.PlayerID;
-            else
-                return -1;
+                return myPlayer.networkPlayerID;
+
+            return new NetworkId();
         }
     }
 
-    public PlayerInfo GetPlayerInfo(int viewID)
+    public PlayerInfo GetPlayerInfo(Fusion.NetworkId viewID)
     {
         PlayerInfo info = null;
 
         if (ListOfPlayers != null && ListOfPlayers.Count > 0)
         {
-            info = ListOfPlayers.Find(x => x.pm != null && x.pm.PlayerID.Equals(viewID));
+            info = ListOfPlayers.Find(x => x.pm != null && x.pm.networkPlayerID.Equals(viewID));
         }
 
         return info;
@@ -174,6 +191,83 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
             return null;
         }
     }
+    public int startRaceTick { get; set; } = 0;
+
+    public int endRaceTick { get; set; } = 0;
+
+    public DateTime countDownEndTime_StartRace = DateTime.Now;
+    public DateTime countDownEndTime_EndRace = DateTime.Now;
+
+    #region Event Bus
+    static Dictionary<GameState, List<Action>> events => IEventBus<GameState>.events;
+    public void SubscribeEvent(GameState key, System.Action ac)
+    {
+        if (events.ContainsKey(key) == false)
+        {
+            var l = new List<Action>();
+            l.Add(ac);
+            events.Add(key, l);
+        }
+        else
+        {
+            events[key].Add(ac);
+        }
+    }
+
+    public void UnSubscribeEvent(GameState key, System.Action ac)
+    {
+        if (events.ContainsKey(key) == true)
+        {
+            var l = events[key];
+            if (l != null)
+            {
+                foreach (var i in l)
+                {
+                    if (i.Equals(ac))
+                    {
+                        l.Remove(i);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    public void UnSubscribeAllEvent(GameState key)
+    {
+        if (events.ContainsKey(key) == true)
+        {
+            events.Remove(key);
+        }
+    }
+
+    public void ExcecuteEvent(GameState key)
+    {
+        if (events.ContainsKey(key))
+        {
+            foreach (var i in events[key])
+                i?.Invoke();
+        }
+    }
+    #endregion
+
+    [Serializable]
+    public class PlayerIsSceneLoaded
+    {
+        public bool isLoaded = false;
+        public long pid = -1; //pid
+    }
+    [SerializeField] public List<PlayerIsSceneLoaded> ListOfPlayerSceneLoaded = new List<PlayerIsSceneLoaded>();
+
+    [Serializable]
+    public class PlayerIsReady
+    {
+        public bool isReady = false;
+        public NetworkId id; //id
+    }
+    [SerializeField] public List<PlayerIsReady> ListOfPlayerSpawnReady = new List<PlayerIsReady>();
+    [SerializeField] public List<PlayerIsReady> ListOfPlayerIsGameReady = new List<PlayerIsReady>();
+
 
     private void Update()
     {
@@ -181,64 +275,93 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                var ui = PrefabManager.Instance.UI_PanelCommon;
-                string msg = "End Match?\nPress Ok to go Home";
-
                 if (gameState != GameState.PlayGame)
                     return;
 
-                ui.SetData(msg, 
-                    () => 
-                    {
-                        if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameResult)
-                            return;
+                string msg = "Ingame_EndMatch".Localize();
 
-                        if (gameState != GameState.PlayGame)
-                            return;
+                UIManager_NGUI.Instance.ActivatePanelDefault_YesNo(msg, () =>
+                {
+                    if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGameResult)
+                        return;
 
-                        if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGame)
-                            PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
-                    }
-                    );
-                ui.Show(UI_PanelBase.Depth.High);
+                    if (gameState != GameState.PlayGame)
+                        return;
+
+                    if (PhaseManager.Instance.CurrentPhase == CommonDefine.Phase.InGame)
+                        PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
+                });
+
             }
         }
 
         //temp for test...!
-#if UNITY_EDITOR
-        if (myPlayer != null && myPlayer.IsMine)
+#if UNITY_EDITOR && CHEAT
+        if (myPlayer != null && myPlayer.IsMineAndNotAI)
         {
             if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
             {
-                myNetworkInGameRPCManager.RPC_ChangeLane_Left(myPlayer.PlayerID);
+                if (myPlayer != null && !myPlayer.network_isEnteredTheFinishLine && !myPlayer.IsStopInputIfSheild())
+                    networkInGameRPCManager.RPC_ChangeLane_Left(myPlayer.networkPlayerID);
             }
 
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
             {
-                myNetworkInGameRPCManager.RPC_ChangeLane_Right(myPlayer.PlayerID);
+                if (myPlayer != null && !myPlayer.network_isEnteredTheFinishLine && !myPlayer.IsStopInputIfSheild())
+                    networkInGameRPCManager.RPC_ChangeLane_Right(myPlayer.networkPlayerID);
             }
 
             if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
             {
-                if (myPlayer.isDecelerating == false)
+                UI_IngameControl_TouchSwipe.OnDrag = true;
+
+                if (myPlayer != null && !myPlayer.network_isEnteredTheFinishLine)
                 {
-                    myNetworkInGameRPCManager.RPC_Deceleration_Start(myPlayer.PlayerID);
+                    if (myPlayer.isShield|| myPlayer.isShieldCooltime)
+                        return;
+
+                    networkInGameRPCManager.RPC_Shield(myPlayer.networkPlayerID);
                 }
             }
 
             if (Input.GetKeyUp(KeyCode.DownArrow) || Input.GetKeyUp(KeyCode.S))
             {
+                UI_IngameControl_TouchSwipe.OnDrag = false;
+                /*
                 if (myPlayer.isDecelerating == true)
-                    myNetworkInGameRPCManager.RPC_Deceleration_End(myPlayer.PlayerID);
+                    networkInGameRPCManager.RPC_Deceleration_End(myPlayer.networkPlayerID);
+                */
             }
 
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
             {
-                PlayerMovement.CarBoosterLevel boosterLv = myPlayer.GetAvailableInputBooster();
-                if (boosterLv == PlayerMovement.CarBoosterLevel.None)
-                    return;
-
-                myNetworkInGameRPCManager.RPC_BoostPlayer(myPlayer.PlayerID, (int)boosterLv);
+                switch (gameState)
+                {
+                    case GameState.StartCountDown:
+                        {
+                            myPlayer.ActivateStartingBooster();
+                        }
+                        break;
+                    case GameState.PlayGame:
+                    case GameState.EndCountDown:
+                        {
+                            PlayerMovement.CarBoosterType boosterLv = myPlayer.GetAvailableInputBooster();
+                            if (boosterLv != PlayerMovement.CarBoosterType.None)
+                            {
+                                if (myPlayer != null && !myPlayer.network_isEnteredTheFinishLine && !myPlayer.isShield && myPlayer.isGrounded && !myPlayer.isOutOfBoundary && !myPlayer.isStunned)
+                                    networkInGameRPCManager.RPC_BoostPlayer(myPlayer.networkPlayerID, (int)boosterLv, (int)myPlayer.currentTimingBoosterSuccessType);
+                            }
+                            else // boosterLv == PlayerMovement.CarBoosterLevel.None
+                            {
+                                if (myPlayer != null)
+                                {
+                                    if (myPlayer.IsTimingBoosterReady)
+                                        myPlayer.ResetTimingBooster();
+                                }
+                            }
+                        }
+                        break;
+                }
             }
         }
 #endif
@@ -256,16 +379,25 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         wayPoints = null;
         mapObjectManager = null;
 
-        playerIsSetInPosition = false;
+        isAllPlayerSetInPosition = false;
         isStartCountDown = false;
         isPlayGame = false;
         isEndCountStarted = false;
         isGameEnded = false;
         isInputDelay = false;
+        myPlayerDataIsSent = false;
 
         ListOfPlayers.Clear();
+        ListOfAIPlayers.Clear();
         ListOfPlayerBehind.Clear();
-        //ListOfFoodTrucks.Clear();
+
+        startRaceTick = 0;
+        endRaceTick = 0;
+
+        countDownEndTime_StartRace = DateTime.UtcNow;
+        countDownEndTime_EndRace = DateTime.UtcNow;
+
+        DataManager.Instance.SetFinalLapCount();
 
         InitializeMiniMap();
 
@@ -278,17 +410,35 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         UtilityCoroutine.StopCoroutine(ref updateRankList, this);
         UtilityCoroutine.StopCoroutine(ref updatePlayerBehindList, this);
         UtilityCoroutine.StopCoroutine(ref updatePingInfo, this);
+
+        UnSubscribeAllEvent(GameState.Initialize);
+        UnSubscribeAllEvent(GameState.IsGameReady);
+        UnSubscribeAllEvent(GameState.StartCountDown);
+        UnSubscribeAllEvent(GameState.PlayGame);
+        UnSubscribeAllEvent(GameState.EndCountDown);
+        UnSubscribeAllEvent(GameState.EndGame);
+
+        if (events != null)
+            events.Clear();
+
+#if UNITY_EDITOR
+        SetPinkMaterial_EditorOnly();
+#endif
+    }
+
+    public void InitializeInGameUI()
+    {
+        PrefabManager.Instance.UI_PanelIngame.Initialize();
     }
 
     private IEnumerator GameRoutine()
     {
         yield return StartCoroutine(ChangeGameState(GameState.Initialize));
-        yield return null;
         yield return StartCoroutine(WaitForAllPlayersLoadScene());
-        yield return null;
 
         SetMap();
         SpawnPlayer();
+        SpawnAI();
         SetUI();
         PoolGameObjects();
         SetCam();
@@ -296,22 +446,18 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
         yield return null;
 
-        yield return StartCoroutine(WaitForSpawnedPlayers());
+        yield return StartCoroutine(WaitForAllPlayersToSpawnPlayers());
 
         yield return StartCoroutine(SendPlayerData());
 
-        yield return StartCoroutine(ChangeGameState(GameState.IsReady));
+        yield return StartCoroutine(ChangeGameState(GameState.IsGameReady));
 
         yield return StartCoroutine(WaitForAllPlayerToBeReady());
 
         yield return StartCoroutine(SetPlayerToStartPosition());
 
-        yield return null;
+        PnixNetworkManager.Instance.SendReadyToStartRace();
 
-        yield return StartCoroutine(ChangeGameState(GameState.StartCountDown));
-        yield return StartCoroutine(WaitForCountDown());
-
-        yield return StartCoroutine(ChangeGameState(GameState.PlayGame));
         yield return StartCoroutine(WaitForPlayGame());
 
         yield return StartCoroutine(WaitForGameOver());
@@ -324,22 +470,77 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     {
         wayPoints = FindObjectOfType<WayPointSystem.WaypointsGroup>();
         mapObjectManager = FindObjectOfType<MapObjectManager>();
+        if (mapObjectManager != null)
+            mapObjectManager.Initialize();
     }
 
     public void SpawnPlayer()
     {
-        Debug.Log("PhotonNetworkManager.Instance.IsHost: " + PhotonNetworkManager.Instance.IsHost);
-        Debug.Log("ListOfNetworkRunners: " + PhotonNetworkManager.Instance.ListOfNetworkRunners.Count);
-        //Host가 Spawn 시킴...
-        if (PhotonNetworkManager.Instance.IsHost)
+        var prefab = PrefabManager.Instance.NetworkPlayer;
+        var runner = PhotonNetworkManager.Instance.MyNetworkRunner.Spawn(prefab, Vector3.zero, Quaternion.identity, PhotonNetworkManager.Instance.MyPlayerRef);
+        if (runner != null)
         {
-            var prefab = PrefabManager.Instance.NetworkPlayer;
+            runner.GetComponent<PlayerMovement>().network_PID = AccountManager.Instance.PID;
+            myPlayer = runner.GetComponent<PlayerMovement>();
+        }
+    }
 
-            foreach (var i in PhotonNetworkManager.Instance.ListOfNetworkRunners)
+    public void SpawnAI()
+    {
+        if (PhotonNetworkManager.Instance.IsRoomMasterClient == false)
+            return;
+
+        int playerCount = PhotonNetworkManager.Instance.listOfNetworkPlayerInfos.Count;
+        int aiCount = InGameManager.Instance.aiAckData.Count;
+
+        if (aiCount > 0 && PhotonNetworkManager.Instance.IsRoomMasterClient)
+        {
+            for (int i = 0; i < aiCount; i++)
             {
-                PhotonNetworkManager.Instance.MyNetworkRunner.Spawn(prefab, Vector3.zero, Quaternion.identity, i.playerRef);
+                var prefab = PrefabManager.Instance.NetworkPlayer_AI;
+                var runner = PhotonNetworkManager.Instance.MyNetworkRunner.Spawn(prefab, Vector3.zero, Quaternion.identity, PhotonNetworkManager.Instance.MyPlayerRef);
+                if (runner != null)
+                {
+                    runner.GetComponent<PlayerMovement>().network_PID = aiAckData[i].ActorID;
+                }
             }
         }
+    }
+
+    public void SetPnixAckRaceInfoData(List<CRacerInfo> list) //PnixNetwork ack Data
+    {
+        //ack 데이터는 phaseingame 들어오고 initialize 전에 설정하는거라 initialize때 clear때리면 안됨!
+        allRacerInfo = list;
+        playerAckData = list.FindAll(x => x.IsAI == false);
+        aiAckData = list.FindAll(x => x.IsAI == true);
+    }
+
+    public void SetListOfPlayerSceneLoaded()
+    {
+        if (playerAckData == null)
+        {
+            Debug.Log("Error... playerAckData is null");
+            return;
+        }
+
+        ListOfPlayerSceneLoaded.Clear();
+        ListOfPlayerSceneLoaded = new List<PlayerIsSceneLoaded>();
+
+        var list = playerAckData;
+        int realPlayerCount = playerAckData.Count;
+
+        for (int i = 0; i < realPlayerCount; i++)
+        {
+            ListOfPlayerSceneLoaded.Add(new PlayerIsSceneLoaded() { isLoaded = false, pid = list[i].ActorID });
+        }
+    }
+
+    public void SetListOfPlayerReady()
+    {
+        ListOfPlayerSpawnReady.Clear();
+        ListOfPlayerSpawnReady = new List<PlayerIsReady>();
+        ListOfPlayerIsGameReady.Clear();
+        ListOfPlayerIsGameReady = new List<PlayerIsReady>();
     }
 
     private void SetCam()
@@ -349,8 +550,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
     private void SetUI()
     {
-        var ingameui = PrefabManager.Instance.UI_PanelIngame;
-        ingameui.Initialize();
+        InitializeInGameUI();
     }
 
     IEnumerator WaitForAllPlayersLoadScene()
@@ -364,7 +564,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         {
             timeElapsed += Time.deltaTime;
             bool isAllPlayerReady = true;
-            foreach (var i in PhotonNetworkManager.Instance.ListOfPlayerSceneLoaded)
+            foreach (var i in ListOfPlayerSceneLoaded)
             {
                 if (i.isLoaded == false)
                 {
@@ -381,10 +581,8 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
                 //게속 기달려도 Ready 하는 사람이 없을때....
                 UtilityCommon.ColorLog("Error...! All players Loading Scene Are not ready....", UtilityCommon.DebugColor.Red);
 
-                var ui = PrefabManager.Instance.UI_PanelCommon;
-                string msg = "Error....!\nSomeone was not ready!";
-                ui.SetData(msg);
-                ui.Show(UI_PanelBase.Depth.High);
+                string msg = "Ingame_MatchError_01".Localize();
+                UIManager_NGUI.Instance.ActivatePanelDefault_Confirm(msg, null);
 
                 PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
                 timeElapsed = 0f;
@@ -393,11 +591,13 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
             yield return null;
         }
+
+        yield return null;
     }
 
-    IEnumerator WaitForSpawnedPlayers()
+    IEnumerator WaitForAllPlayersToSpawnPlayers()
     {
-        yield return new WaitForSeconds(1f);
+        yield return null;
 
         while (myPlayer == null)
         {
@@ -406,41 +606,44 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
         while (true)
         {
-            UtilityCoroutine.StartCoroutine(ref updateNetworkPlayerList, UpdateNetworkPlayerListRoutinte(), this);
+            yield return UpdateNetworkPlayerListRoutinte();
 
             if (ListOfPlayers != null)
             {
-                if (PhotonNetworkManager.Instance.RoomPlayersCount == ListOfPlayers.Count)
+                if (totalPlayerCount <= ListOfPlayers.Count)
                     break;
             }
 
             yield return new WaitForSeconds(0.5f);
         }
 
-        Debug.Log("PhotonNetworkManager.Instance.RoomPlayersCount: " + PhotonNetworkManager.Instance.RoomPlayersCount);
-
-#if CHEAT
-        if (CommonDefine.isForcePlaySolo)
+        //Set My Player
+        networkInGameRPCManager.RPC_IsSpawnReady(myPlayer.networkPlayerID);
+        //Set AI
+        if (PhotonNetworkManager.Instance.IsRoomMasterClient)
         {
-            UtilityCoroutine.StartCoroutine(ref updateNetworkPlayerList, UpdateNetwortkPlayerList(), this);
-            yield break;
+            foreach (var i in ListOfAIPlayers)
+            {
+                if (i.pm != null && i.pm.IsMineAndAI)
+                    networkInGameRPCManager.RPC_IsSpawnReady(i.pm.networkPlayerID);
+            }
         }
-#endif
 
-        /*
-        if (CommonDefine.GetMaxPlayer() != 1 && PhotonNetworkManager.Instance.RoomPlayersCount <= 1)
+        //모든 사람이 다 스폰에 성공할때까지 기다리자...!
+        while (true)
         {
-            //Room Player Count에 문제가 있을 경우...
-            UtilityCommon.ColorLog("Error...! Room Player Count is " + PhotonNetworkManager.Instance.RoomPlayersCount, UtilityCommon.DebugColor.Red);
+            yield return null;
 
-            var ui = PrefabManager.Instance.UI_PanelCommon;
-            string msg = "Error....!\nRoom Player Count is " + PhotonNetworkManager.Instance.RoomPlayersCount;
-            ui.SetData(msg);
-            ui.Show(UI_PanelBase.Depth.High);
+            if (ListOfPlayers != null)
+            {
+                if (totalPlayerCount <= ListOfPlayerSpawnReady.Count)
+                    break;
+            }
 
-            PhotonNetworkManager.Instance.LeaveRoom(LeaveRoomCallback);
+            yield return new WaitForSeconds(0.2f);
         }
-        */
+
+        Debug.Log("PhotonNetworkManager ListOfNetworkRunners Count: " + PhotonNetworkManager.Instance.listOfNetworkPlayerInfos.Count);
 
         UtilityCoroutine.StartCoroutine(ref updateNetworkPlayerList, UpdateNetworkPlayerListRoutinte(), this);
 
@@ -454,29 +657,20 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         while (true)
         {
             timeElapsed += Time.deltaTime;
-            bool isAllPlayerReady = true;
-            foreach (var i in ListOfPlayers)
+
+            if (ListOfPlayerIsGameReady.Count >= totalPlayerCount)
             {
-                if (i.isReady == false)
-                {
-                    isAllPlayerReady = false;
-                    break;
-                }
-            }
-
-            if (isAllPlayerReady == true)
+                //isAllPlayerReady = true;
                 break;
-
+            }
 
             if (timeElapsed > 10f && isError == false)
             {
                 //게속 기달려도 Ready 하는 사람이 없을때....
                 UtilityCommon.ColorLog("Error...! All players Are not ready....", UtilityCommon.DebugColor.Red);
 
-                var ui = PrefabManager.Instance.UI_PanelCommon;
-                string msg = "Error....!\nSomeone was not ready!";
-                ui.SetData(msg);
-                ui.Show(UI_PanelBase.Depth.High);
+                string msg = "Ingame_MatchError_02".Localize();
+                UIManager_NGUI.Instance.ActivatePanelDefault_Confirm(msg, null);
 
                 PhotonNetworkManager.Instance.LeaveSession(LeaveRoomCallback);
                 isError = true;
@@ -486,28 +680,64 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         }
     }
 
-    private void LeaveRoomCallback()
+    public void LeaveRoomCallback()
     {
-        PhaseManager.Instance.ChangePhase(CommonDefine.Phase.Lobby);
+        PnixNetworkManager.Instance.SendLeaveRaceReq();
     }
 
     IEnumerator SendPlayerData()
     {
-        while (myPlayer == null)
-            yield return null;
+        //스폰에 꼭 다 성공하고 Player Data 보내주자...!
 
-        //내 정보를 남들한테 보내주자
+        PlayerDataList playerDataList = new PlayerDataList();
+
+        //내 정보를 남들한테 보내주자  + AI data
         PlayerData data = new PlayerData()
         {
-            UserId = DataManager.Instance.userData.UserId,
-            ownerNickName = DataManager.Instance.userData.NickName,
-            playerId = myPlayer.PlayerID,
-            carID = DataManager.Instance.userData.MyCarID,
-            characterID = DataManager.Instance.userData.MyCharacterID,
+            PID = AccountManager.Instance.PID,
+            ownerNickName = myRacerInfo.NickName,
+            photonNetworkId = myPlayer.networkPlayerID,
+            carID = myRacerInfo.CarID,
+            carLevel = myRacerInfo.CarLevel,
+            characterID = myRacerInfo.CharacterID,
+            aiType = 0,
         };
-        string jsonData = JsonUtility.ToJson(data);
 
-        myNetworkInGameRPCManager.RPC_SetPlayerStats(jsonData);
+        playerDataList.listOfPlayerData.Add(data);
+
+        //Set AI
+        if (PhotonNetworkManager.Instance.IsRoomMasterClient)
+        {
+            int index = 0;
+            var aiList = ListOfAIPlayers;
+            for (int i = 0; i < aiAckData.Count; ++i)
+            {
+                if (i >= ListOfAIPlayers.Count)
+                    break; //이럴 경우가 있나...? 혹시 모르니까...
+
+                int aitype = AccountManager.Instance.TEMP_AI_TYPE;
+
+                PlayerData aiData = new PlayerData()
+                {
+                    PID = aiAckData[i].ActorID,
+                    ownerNickName = aiAckData[i].NickName,
+                    photonNetworkId = ListOfAIPlayers[i].photonNetworkID,
+                    carID = aiAckData[i].CarID,
+                    carLevel = aiAckData[i].CarLevel,
+                    characterID = aiAckData[i].CharacterID,
+                    aiType = aitype,
+                };
+
+                if (ListOfAIPlayers[i].pm != null && ListOfAIPlayers[i].pm.IsMineAndAI)
+                    playerDataList.listOfPlayerData.Add(aiData);
+
+                ++index;
+            }
+        }
+
+        string jsonData = JsonUtility.ToJson(playerDataList);
+
+        networkInGameRPCManager.RPC_SetPlayerStats(jsonData);
 
         yield return null;
 
@@ -518,18 +748,16 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
     IEnumerator SetPlayerToStartPosition()
     {
-        if (PhotonNetworkManager.Instance.IsHost)
+        if (PhotonNetworkManager.Instance.IsRoomMasterClient)
         {
             var randomSpawnPointList = new List<int>();
 
-            var spawnCount = CommonDefine.GetMaxPlayer();
+            var spawnCount = DataManager.Instance.GetSessionTotalCount();
 
             for (int i = 0; i < spawnCount; i++)
                 randomSpawnPointList.Add(i);
 
             UtilityCommon.ShuffleList<int>(ref randomSpawnPointList);
-
-            Dictionary<int, int> dicOfPlayerSpawnPosition = new Dictionary<int, int>();
 
             for (int i = 0; i < ListOfPlayers.Count; i++)
             {
@@ -538,11 +766,11 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
                 {
                     if (i < randomSpawnPointList.Count)
                     {
-                        myNetworkInGameRPCManager.RPC_SetPlayerToPosition(pm.PlayerID, randomSpawnPointList[i]);
+                        networkInGameRPCManager.RPC_SetPlayerToPosition(pm.networkPlayerID, randomSpawnPointList[i]);
                     }
                     else
                     {
-                        myNetworkInGameRPCManager.RPC_SetPlayerToPosition(pm.PlayerID, 0);
+                        networkInGameRPCManager.RPC_SetPlayerToPosition(pm.networkPlayerID, 0);
                     }
                 }
             }
@@ -550,13 +778,33 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
         yield return null;
 
-        while (playerIsSetInPosition == false)
-            yield return null;
-    }
 
-    private IEnumerator WaitForCountDown()
-    {
-        yield return new WaitForSeconds(CommonDefine.START_COUNTDOWN_TIME);
+        //모든 플레이어가 Position에 세팅 될때까지 대기...
+        float timeLimit = 10;
+        float timeCounter = 0;
+        while (isAllPlayerSetInPosition == false)
+        {
+            int counter = 0;
+            foreach (var i in ListOfPlayers)
+            {
+                if (i.isSetToPosition == true)
+                    ++counter;
+
+                if (counter.Equals(ListOfPlayers.Count))
+                {
+                    isAllPlayerSetInPosition = true;
+                    break;
+                }
+            }
+
+            timeCounter += Time.deltaTime;
+            if (timeCounter >= timeLimit)
+            {
+                //10초에도 세팅이 안된다면 그냥 넘겨주자...
+                break;
+            }
+            yield return null;
+        }
     }
 
     IEnumerator WaitForPlayGame()
@@ -587,6 +835,9 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
     public IEnumerator ChangeGameState(GameState state)
     {
+        if (gameState != state)
+            Debug.Log("<color=cyan>Game State prev: " + gameState + " => current: " + state + "</color>");
+
         gameState = state;
 
         switch (gameState)
@@ -595,16 +846,24 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
                 {
                     InitializeSettings();
 
-                    //Initialize이후 핑 정보 계속 보내자....!
-                    UtilityCoroutine.StartCoroutine(ref updatePingInfo, UpdatePingInfo(), this);
+                    ExcecuteEvent(GameState.Initialize);
                 }
                 break;
 
-            case GameState.IsReady:
+            case GameState.IsGameReady:
                 {
                     if (myPlayer != null)
                     {
-                        myNetworkInGameRPCManager.RPC_IsReady(myPlayer.PlayerID);
+                        networkInGameRPCManager.RPC_IsGameReady(myPlayer.networkPlayerID);
+
+                        //Set AI
+                        foreach (var i in ListOfAIPlayers)
+                        {
+                            if (i.pm != null && i.pm.IsMineAndAI)
+                                networkInGameRPCManager.RPC_IsGameReady(i.pm.networkPlayerID);
+                        }
+
+                        ExcecuteEvent(GameState.IsGameReady);
                     }
                     else
                     {
@@ -615,49 +874,176 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
             case GameState.StartCountDown:
                 {
-                    //마스터 클라이언트가 게임 카운트다운을 알림!
-                    if (PhotonNetworkManager.Instance.IsHost)
-                        myNetworkInGameRPCManager.Invoke("RPC_StartCountDown", 0f);
+                    if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                        break;
+
+                    if (isStartCountDown)
+                        break;
+
+                    isStartCountDown = true;
+
+                    UIManager_NGUI.Instance.DeactivateUI(UIManager_NGUI.UIType.UI_PanelLoading);
+
+                    var ingamePanel = PrefabManager.Instance.UI_PanelIngame;
+
+                    if (ingamePanel.gameObject.activeSelf == true)
+                    {
+                        ingamePanel.ActivateCountDownTxt(UI_PanelIngame.CountDownType.Start, countDownEndTime_StartRace);
+                    }
+
+                    //camChangeTime 이후에 카메라 바꿔주자...
+
+                    var ts = countDownEndTime_StartRace - PnixNetworkManager.Instance.ServerTime;
+    
+                    var camChangeTime_1 = (float)ts.TotalSeconds - 5f;
+                    if (camChangeTime_1 > 0)
+                    {
+                        this.Invoke(() =>
+                        {
+                            foreach (var i in ListOfPlayers)
+                            {
+                                if (i != null && i.pm != null)
+                                    i.pm.ActivateIntroMovement();
+                            }
+
+                            if (gameState == GameState.StartCountDown)
+                                CameraManager.Instance.ChangeCamType(CameraManager.CamType.InGame_MainCam_LookAtPlayerIntro);
+                        }, camChangeTime_1);
+                    }
                     else
                     {
-                        //혹시나 마스터 클라이언트가 상태가 메롱하면... 다른 사람이 알려주자...!
-                        //간혹 이런 경우가 있.... 나중에 host 기반이 아닌 자체 서버에서 패킷 날려주자...
-                        myNetworkInGameRPCManager.Invoke("RPC_StartCountDown", 3f);
+                        Debug.Log("CountDown Time is too short to play playerIntro movement");
                     }
+
+                    var camChangeTime_2 = (float)ts.TotalSeconds - 3f;
+                    if (camChangeTime_2 > 0)
+                    {
+                        this.Invoke(() =>
+                        {
+                            if (gameState == InGameManager.GameState.StartCountDown)
+                            {
+                                foreach (var i in InGameManager.Instance.ListOfPlayers)
+                                {
+                                    if (i != null && i.pm != null)
+                                        i.pm.MoveToStartPosiiton();
+                                }
+
+                                CameraManager.Instance.ChangeCamType(CameraManager.CamType.InGame_MainCam_FollowPlayerBack_Default);
+                            }
+                        }, camChangeTime_2);
+                    }
+                    else
+                    {
+                        Debug.Log("CountDown Time is too short to change cam type to InGame_MainCam_FollowPlayerBack_Default");
+                    }
+
+                    if (myPlayer != null)
+                        networkInGameRPCManager.RPC_SetPlayerBattery(myPlayer.networkPlayerID, true, myPlayer.ref_batteryStartAmount);
+
+                    ExcecuteEvent(GameState.StartCountDown);
                 }
                 break;
 
             case GameState.PlayGame:
                 {
-                    //마스터 클라이언트가 게임 시작을 알림!
-                    if (PhotonNetworkManager.Instance.IsHost)
-                        myNetworkInGameRPCManager.Invoke("RPC_PlayGame", 0f);
-                    else
+                    if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                        break;
+
+                    if (isPlayGame)
+                        break;
+
+                    if (InGameManager.Instance.wayPoints == null)
                     {
-                        //혹시나 마스터 클라이언트가 상태가 메롱하면... 다른 사람이 알려주자...!
-                        //간혹 이런 경우가 있.... 나중에 host 기반이 아닌 자체 서버에서 패킷 날려주자...
-                        myNetworkInGameRPCManager.Invoke("RPC_PlayGame", 3f);
+                        Debug.Log("ERRRRRRoor....! waypoint is null");
+                        break;
                     }
 
+                    isPlayGame = true;
+
+                    CameraManager.Instance.ChangeCamType(CameraManager.CamType.InGame_MainCam_FollowPlayerBack_Default);
+
+                    foreach (var i in ListOfPlayers)
+                    {
+                        //나
+                        if (i.pm != null && i.pm.IsMineAndNotAI)
+                        {
+                            i.pm.StartMoving();
+                        }
+
+                        //내 AI
+                        if (i.pm != null && i.pm.IsMineAndAI)
+                        {
+                            i.pm.StartMoving();
+                        }
+                    }
+
+
+                    var ingamePanel = PrefabManager.Instance.UI_PanelIngame;
+                    ingamePanel.ActivateIngamePlayTxt();
+                    ingamePanel.ActivateGoTxt();
+                    ingamePanel.ActivateParryingCooltimeGO();
+                    ingamePanel.ActivateNickname();
+
+                    UtilityCoroutine.StartCoroutine(ref updateRankList, UpdateRankList(), this);
+                    UtilityCoroutine.StartCoroutine(ref updatePlayerBehindList, UpdatePlayerBehindList(), this);
+                    UtilityCoroutine.StartCoroutine(ref updateMapObjectList, UpdateMapObjectList(), this);
+                    UtilityCoroutine.StartCoroutine(ref updateMiniMap, UpdateMiniMap(), this);
+
+                    ExcecuteEvent(GameState.PlayGame);
                 }
                 break;
 
             case GameState.EndCountDown:
                 {
+                    if (isEndCountStarted == true)
+                        break;
 
+                    isEndCountStarted = true;
+
+                    var ingamePanel = PrefabManager.Instance.UI_PanelIngame;
+                    if (ingamePanel.gameObject.activeSelf == true)
+                    {
+                        ingamePanel.ActivateCountDownTxt(UI_PanelIngame.CountDownType.End, countDownEndTime_EndRace);
+                    }
+
+                    ExcecuteEvent(GameState.EndCountDown);
                 }
                 break;
 
             case GameState.EndGame:
                 {
+                    if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                        break;
+
+                    if (isGameEnded == true)
+                        break;
+
+                    var ingamePanel = PrefabManager.Instance.UI_PanelIngame;
+                    ingamePanel.ActivateStandingInfo(); //retire된 사람들을 위해 한번 더 켜주자...!
+
+                    isPlayGame = false;
+                    isGameEnded = true;
+
                     FinalUpdateRankList();
                     SetEndGameResultToUserData();
                     SetEndGameResultToMatchRecordData();
 
+                    foreach (var i in ListOfPlayers)
+                    {
+                        if (i != null && i.pm != null && i.pm.IsMine
+                            && (i.pm.isFlipped || i.pm.isOutOfBoundary))
+                            i.pm.MovePlayerToValidPosition();
+                    }
+
                     SoundManager.Instance.PlaySound(SoundManager.SoundClip.Applause);
-                    SoundManager.Instance.PlaySound_BGM(SoundManager.SoundClip.Ingame_BGM_02, SoundManager.PlaySoundType.Immediate);
+                    SoundManager.Instance.PlaySound_BGM(SoundManager.SoundClip.Ingame_BGM_01, SoundManager.PlaySoundType.Immediate);
+
+                    PhaseManager.Instance.ChangePhase(CommonDefine.Phase.InGameResult);
+
+                    ExcecuteEvent(GameState.EndGame);
                 }
                 break;
+
             default:
                 break;
         }
@@ -676,13 +1062,13 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
       
         foreach (var i in playerClass)
         {
-            if (i == null)
+            if (i == null || i.networkPlayerID == null)
                 continue;
 
-            if (ListOfPlayers.Exists(x => x.playerID.Equals(i.PlayerID)))
+            if (ListOfPlayers != null && ListOfPlayers.Exists(x => x != null && x.photonNetworkID.Equals(i.networkPlayerID)))
                 continue;
 
-            ListOfPlayers.Add(new PlayerInfo() { go = i.gameObject, pm = i, enterFinishLineTime_Network = 0f, isReady = false });
+            ListOfPlayers.Add(new PlayerInfo() { go = i.gameObject, pm = i, enterFinishLineTime_Network = 0f });
         }
 
         yield return null;
@@ -696,6 +1082,8 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
             while (true)
             {
+                if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                    break;
 
                 foreach (var i in ListOfPlayers)
                 {
@@ -711,7 +1099,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
                 var result = ListOfPlayers.OrderByDescending(x => x.isEnterFinishLine_Network)
                     .ThenByDescending(x => x.currentLap)
-                    .ThenByDescending(x=>x.pm.currentMoveIndex)
+                    .ThenByDescending(x=>x.pm.client_currentMoveIndex)
                     .ThenBy(x => x.distLeft);
                 ListOfPlayers = result.ToList();
 
@@ -742,7 +1130,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
             {
                 foreach (var i in playerList)
                 {
-                    if (myPlayer == null || i.playerID.Equals(myPlayer.PlayerID))
+                    if (myPlayer == null || i.photonNetworkID.Equals(myPlayer.networkPlayerID))
                         continue;
 
                     if (i.pm == null || i.pm.playerCar == null || i.pm.playerCar.currentCar == null || i.pm.playerCar.currentCar.go == null)
@@ -752,12 +1140,12 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
                         continue;
                     }
 
-                    var renderer = i.pm.playerCar.currentCar.go.GetComponentInChildren<SkinnedMeshRenderer>();
+                    var renderer = i.pm.playerCar.currentCar.bodyMesh;
 
                     if (renderer != null)
                     {
-                        if (CameraManager.Instance.currentCamType == CameraManager.CamType.Follow_Type_Default
-                            && myPlayer.isMoving && !myPlayer.isFlipped && !myPlayer.isOutOfBoundary && !myPlayer.isEnteredTheFinishLine)
+                        if (CameraManager.Instance.currentCamType == CameraManager.CamType.InGame_MainCam_FollowPlayerBack_Default
+                            && myPlayer.network_isMoving && !myPlayer.isFlipped && !myPlayer.isOutOfBoundary && !myPlayer.network_isEnteredTheFinishLine)
                         {
                             if (UtilityCommon.IsObjectVisible(ingameCam, renderer))
                             {
@@ -768,8 +1156,8 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
                             else
                             {
                                 //안 보이는 중...!
-                                if (Vector3.Distance(myPlayer.transform.position, i.pm.transform.position) < CommonDefine.PLAYER_INDICATOR_CHECK_BEHIND_DIST
-                                    && i.pm.isFlipped == false && i.pm.isOutOfBoundary == false && i.pm.isEnteredTheFinishLine == false)
+                                if (Vector3.Distance(myPlayer.transform.position, i.pm.transform.position) < DataManager.PLAYER_INDICATOR_CHECK_BEHIND_DIST
+                                    && i.pm.isFlipped == false && i.pm.isOutOfBoundary == false && i.pm.network_isEnteredTheFinishLine == false)
                                 {
                                     if (ListOfPlayerBehind.Contains(i) == false)
                                         ListOfPlayerBehind.Add(i);
@@ -790,7 +1178,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
                 var ui = PrefabManager.Instance.UI_PanelIngame;
                 if (ListOfPlayerBehind != null && ListOfPlayerBehind.Count > 0
-                    && CameraManager.Instance.currentCamType == CameraManager.CamType.Follow_Type_Default)
+                    && CameraManager.Instance.currentCamType == CameraManager.CamType.InGame_MainCam_FollowPlayerBack_Default)
                 {
                     ui.ActivateWarningGO();
 
@@ -808,6 +1196,9 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
             if (isGameEnded == true)
                 break;
 
+            if (PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
+                break;
+
             yield return new WaitForSeconds(0.2f);
         }
     }
@@ -815,69 +1206,15 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
 
     private void SetEndGameResultToUserData()
     {
-#if CHEAT
-        if (CommonDefine.isForcePlaySolo)
-            return;
-#endif
-
-        foreach (var i in ListOfPlayers)
-        {
-            if (i != null && i.pm != null && i.pm.IsMine && DataManager.Instance.userData != null)
-            {
-                if (i.pm.currentRank == 1)
-                    DataManager.Instance.userData.GameStats_FirstPlaceCount++;
-                else if (i.pm.currentRank == 2)
-                    DataManager.Instance.userData.GameStats_SecondPlaceCount++;
-                else if (i.pm.currentRank == 3)
-                    DataManager.Instance.userData.GameStats_ThirdPlaceCount++;
-                else if (i.pm.currentRank == 4)
-                    DataManager.Instance.userData.GameStats_FourthPlaceCount++;
-                else if (i.pm.currentRank == 5)
-                    DataManager.Instance.userData.GameStats_FivthPlaceCount++;
-
-                if(i.pm.isEnteredTheFinishLine == false)
-                    DataManager.Instance.userData.GameStats_RetireCount++;
-
-
-                DataManager.Instance.userData.GameStats_GamePlayCount++;
-            }
-        }
-
         DataManager.Instance.SaveUserData();
     }
 
     private void SetEndGameResultToMatchRecordData()
     {
-#if CHEAT
-        if (CommonDefine.isForcePlaySolo)
+        if (PhotonNetworkManager.Instance.IsRoomMasterClient == false)
             return;
-#endif
-
-        if (PhotonNetworkManager.Instance.IsHost == false)
-            return;
-
-        DataManager.MATCH_RECORD_DATA.MatchResultInfo data = new DataManager.MATCH_RECORD_DATA.MatchResultInfo();
-        data.MapId = CommonDefine.GAME_MAP_ID;
-        data.TotalPlayers = ListOfPlayers.Count;
-
-        foreach (var i in ListOfPlayers)
-        {
-            data.PlayerResultInfoList.Add(new DataManager.MATCH_RECORD_DATA.MatchResultInfo.PlayerResultInfo()
-            {
-                rank = i.currentRank,
-                totalGameTime = i.enterFinishLineTime_Network,
-                playerId = i.data.UserId,
-                playerCarId = i.data.carID,
-                playerCharacterId = i.data.characterID,
-
-                attackCount = 0,
-                defenceCount = 0,
-            });
-        }
 
         string matchName = System.DateTime.UtcNow.ToString("yyyy-MM-dd  H:m:s", System.Globalization.CultureInfo.CreateSpecificCulture("en-US")) + "__" + SystemInfo.deviceUniqueIdentifier;
-
-        DataManager.Instance.SaveMatchRecordData(data, matchName);
     }
 
 
@@ -898,17 +1235,15 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         //IsMasterClient 아닌 겨우 -> 물려 받는 경우를 위해.... 무한 루프로 체크
         while (true)
         {
-            if (gameState == GameState.EndGame)
+            if (gameState == GameState.EndGame || PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
                 break;
 
-            if (PhotonNetworkManager.Instance.IsHost)
+            if (PhotonNetworkManager.Instance.IsRoomMasterClient)
             {
                 if (mapObjectManager != null)
                 {
-                    foreach (var i in mapObjectManager.containerBoxList)
-                    {
-                        StartCoroutine(ContainerCoroutine(i));
-                    }
+                    mapObjectManager.ContainerLoop();
+                    mapObjectManager.CatapultLoop();
                 }
                 break;
             }
@@ -919,48 +1254,21 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
         yield break;
     }
 
-    private IEnumerator ContainerCoroutine(MapObject_ContainerBox box)
-    {
-        float counter = 0f;
-        float coolTime = box.coolTime;
-        float initialDelay = box.startDelay;
 
-        yield return new WaitForSecondsRealtime(initialDelay);
-
-        while (true)
-        {
-            counter += Time.fixedDeltaTime;
-
-            if (counter >= coolTime)
-            {
-                if (myPlayer != null && box != null)
-                    myNetworkInGameRPCManager.RPC_ActivateContainerBox(myPlayer.PlayerID, box.id);
-
-                counter = 0f;
-            }
-
-            yield return new WaitForFixedUpdate();
-
-
-            if (gameState == GameState.EndGame)
-                break;
-
-            if (PhotonNetworkManager.Instance.IsHost == false)
-                break;
-        }
-    }
 
 
     private IEnumerator UpdatePingInfo()
     {
+        yield break; //TODO...
+
         float PING_INFO_SEND_RATE = 0.5f;
         while (true)
         {
-            if (myNetworkInGameRPCManager == null)
+            if (networkInGameRPCManager == null)
                 break;
 
             yield return new WaitForSeconds(PING_INFO_SEND_RATE);
-            myNetworkInGameRPCManager.RPC_SendPingInfo();
+            networkInGameRPCManager.RPC_SendPingInfo();
 
 
             if (gameState == GameState.EndGame)
@@ -977,13 +1285,10 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     {
         bool block = false;
 
-        if (gameState == GameState.Initialize || gameState == GameState.EndGame)
+        if (gameState == GameState.Initialize || PhaseManager.Instance.CurrentPhase != CommonDefine.Phase.InGame)
             block = true;
 
         if (isGameEnded)
-            block = true;
-
-        if (myPlayer.isEnteredTheFinishLine)
             block = true;
 
         return block;
@@ -1000,7 +1305,7 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     {
         isInputDelay = true;
 
-        float timer = CommonDefine.GAME_INPUT_DELAY;
+        float timer = DataManager.GAME_INPUT_DELAY;
 
         while (true)
         {
@@ -1019,10 +1324,10 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     {
         bool isLastLap = false;
 
-        if (CommonDefine.GetFinalLapCount() == -1)
+        if (DataManager.FinalLapCount == -1)
             return false;
 
-        if (lap == CommonDefine.GetFinalLapCount() - 1)
+        if (lap == DataManager.FinalLapCount - 1)
             return true;
 
         return isLastLap;
@@ -1032,10 +1337,10 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     {
         bool isFinalLap = false;
 
-        if (CommonDefine.GetFinalLapCount() == -1)
+        if (DataManager.FinalLapCount == -1)
             return false;
 
-        if (lap >= CommonDefine.GetFinalLapCount())
+        if (lap >= DataManager.FinalLapCount)
             return true;
 
         return isFinalLap;
@@ -1050,5 +1355,29 @@ public partial class InGameManager : MonoSingletonNetworkBehaviour<InGameManager
     private void PhotonCallback_OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
         UpdateNetworkPlayerList();
+    }
+
+
+    private void SetPinkMaterial_EditorOnly()
+    {
+#if UNITY_EDITOR
+        //에디터에서 핑크 현상....
+        var list = FindObjectsOfType<Renderer>();
+
+        foreach (var i in list)
+        {
+            foreach (var j in i.materials)
+            {
+                if (j != null)
+                {
+                    if (j.shader.name.Contains(CommonDefine.ShaderName_DTRBasicUnlitShader))
+                        j.shader = Shader.Find("Shader Graphs/" + CommonDefine.ShaderName_DTRBasicUnlitShader);
+                    else if (j.shader.name.Contains(CommonDefine.ShaderName_DTRBasicLitShader))
+                        j.shader = Shader.Find("Shader Graphs/" + CommonDefine.ShaderName_DTRBasicLitShader);
+                }
+            }
+        }
+
+#endif
     }
 }

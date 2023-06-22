@@ -16,14 +16,14 @@ public class EditorMenu
     }
     */
 
-    [MenuItem(CommonDefine.ProjectName + "/Go to Scene/OutGame Scene")]
+    [MenuItem(CommonDefine.ProjectName + "/Go to Scene/OutGame Scene", priority = 1)]
     public static void GoToLobbyScene()
     {
         EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo();
         EditorSceneManager.OpenScene("Assets/1.Scenes/OutGameScene.unity");
     }
 
-    [MenuItem(CommonDefine.ProjectName + "/Go to Scene/InGame Scene")]
+    [MenuItem(CommonDefine.ProjectName + "/Go to Scene/InGame Scene", priority = 1)]
     public static void GoToInGameScene()
     {
         EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo();

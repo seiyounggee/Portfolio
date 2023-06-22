@@ -4,22 +4,258 @@ using UnityEngine;
 
 public class OutGamePlayer : MonoBehaviour
 {
-    [SerializeField] PlayerCar car = null;
-    [SerializeField] PlayerCharacter character = null;
+    [SerializeField] PlayerCar playerCar = null;
+    [SerializeField] PlayerCharacter playerCharacter = null;
+
+    public enum MovementType { None, Spin, Move}
+    public MovementType currentMovementType = MovementType.None;
+    public enum AnimationState { Idle, Drive, Booster_1, Booster_2, Brake, MoveLeft, MoveRight, Flip, Victory, Complete, Retire, Spin }
+    [ReadOnly] public AnimationState currentCarAnimationState = AnimationState.Idle;
+    [ReadOnly] public AnimationState currentCharAnimationState = AnimationState.Idle;
+
+    private void Awake()
+    {
+        if(playerCar == null)
+            playerCar.GetComponentInChildren<PlayerCar>();
+
+        if (playerCharacter == null)
+            playerCharacter.GetComponentInChildren<PlayerCharacter>();
+    }
 
     public void SetData()
     {
         //Set Car
         //Set Character ...
-        if (DataManager.Instance.userData != null && car != null && character != null)
+        if (playerCar != null && playerCharacter != null)
         {
-            var carID = DataManager.Instance.userData.MyCarID;
-            var charID = DataManager.Instance.userData.MyCharacterID;
+            var carID = AccountManager.Instance.Equipped_CarID;
+            var charID = AccountManager.Instance.Equipped_CharacterID;
 
-            car.SetCar((DataManager.CAR_DATA.CarID)carID);
-            character.SetCharacter((DataManager.CHARACTER_DATA.CharacterType)charID);
-            character.SetHeadObj(carID);
+            var carRef = DataManager.Instance.GetCarRef(carID);
+            if (carRef != null)
+                playerCar.SetCar(carRef);
+
+            var charRef = DataManager.Instance.GetCharacterRef(charID);
+            if (charRef != null)
+                playerCharacter.SetCharacter(charRef);
+
+            transform.rotation = Quaternion.Euler(0f, -135f, 0f);
         }
-
     }
+
+    public void ChangeMovementType(MovementType type)
+    {
+        currentMovementType = type;
+    }
+
+
+    public void FixedUpdate()
+    {
+        if (playerCar == null || playerCharacter == null)
+            return;
+
+        switch (currentMovementType)
+        {
+            case MovementType.None:
+                {
+                    SetAnimation_Both(AnimationState.Idle, true);
+                    SetAnimation_Both(AnimationState.Drive, false);
+                }
+                break;
+            case MovementType.Spin:
+                {
+                    SetAnimation_Both(AnimationState.Idle, true);
+                    SetAnimation_Both(AnimationState.Drive, false);
+
+                    Vector3 euler = transform.rotation.eulerAngles + new Vector3(0f, Time.fixedDeltaTime * 20f, 0f);
+                    Quaternion rot = Quaternion.Euler(euler);
+                    transform.rotation = rot;
+                }
+                break;
+            case MovementType.Move:
+                {
+                    SetAnimation_Both(AnimationState.Idle, false);
+                    SetAnimation_Both(AnimationState.Drive, true);
+                }
+                break;
+        }
+    }
+
+
+
+    #region Animation
+
+    private void SetAnimation_Both(AnimationState state, bool isOn)
+    {
+        SetAnimation_CarOnly(state, isOn);
+        SetAnimation_CharacterOnly(state, isOn);
+    }
+
+    private void SetAnimation_CarOnly(AnimationState state, bool isOn)
+    {
+        if (playerCar == null || playerCar.currentCar == null || playerCar.currentCar.animator == null)
+            return;
+
+        currentCarAnimationState = state;
+
+        var carAnim = playerCar.currentCar.animator;
+
+        switch (state)
+        {
+            case AnimationState.Idle:
+                {
+                    carAnim.SafeSetBool(playerCar.GetString_ANIM_IDLE(), isOn);
+                }
+                break;
+            case AnimationState.Drive:
+                {
+                    carAnim.SafeSetBool(playerCar.GetString_ANIM_DRIVE(), isOn);
+                }
+                break;
+            case AnimationState.Booster_1:
+                {
+                    if (isOn)
+                    {
+                        carAnim.SafeResetTrigger(playerCar.GetString_ANIM_BOOSTER_1());
+                        carAnim.SafeSetTrigger(playerCar.GetString_ANIM_BOOSTER_1());
+                    }
+                }
+                break;
+            case AnimationState.Booster_2:
+                {
+                    if (isOn)
+                    {
+                        carAnim.SafeResetTrigger(playerCar.GetString_ANIM_BOOSTER_2());
+                        carAnim.SafeSetTrigger(playerCar.GetString_ANIM_BOOSTER_2());
+                    }
+                }
+                break;
+            case AnimationState.Brake:
+                {
+                    carAnim.SafeSetBool(playerCar.GetString_ANIM_BRAKE(), isOn);
+                }
+                break;
+            case AnimationState.MoveLeft:
+                {
+                    carAnim.SafeSetBool(playerCar.GetString_ANIM_LEFT(), isOn);
+                }
+                break;
+            case AnimationState.MoveRight:
+                {
+                    carAnim.SafeSetBool(playerCar.GetString_ANIM_RIGHT(), isOn);
+                }
+                break;
+
+            case AnimationState.Flip:
+                {
+                    if (isOn)
+                    {
+                        carAnim.SafeResetTrigger(playerCar.GetString_ANIM_FLIP());
+                        carAnim.SafeSetTrigger(playerCar.GetString_ANIM_FLIP());
+                    }
+                }
+                break;
+            case AnimationState.Spin:
+                {
+                    if (isOn)
+                    {
+                        carAnim.SafeResetTrigger(playerCar.GetString_ANIM_SPIN());
+                        carAnim.SafeSetTrigger(playerCar.GetString_ANIM_SPIN());
+                    }
+                }
+                break;
+        }
+    }
+
+    private void SetAnimation_CharacterOnly(AnimationState state, bool isOn)
+    {
+        if (playerCharacter == null || playerCharacter.currentCharacter == null || playerCharacter.currentCharacter.animator == null)
+            return;
+
+        currentCharAnimationState = state;
+
+        var charAnim = playerCharacter.currentCharacter.animator;
+
+        switch (state)
+        {
+            case AnimationState.Idle:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_IDLE(), isOn);
+                }
+                break;
+            case AnimationState.Drive:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_DRIVE(), isOn);
+                }
+                break;
+            case AnimationState.Booster_1:
+                {
+                    if (isOn)
+                    {
+                        charAnim.SafeResetTrigger(playerCharacter.GetString_ANIM_BOOSTER_1());
+                        charAnim.SafeSetTrigger(playerCharacter.GetString_ANIM_BOOSTER_1());
+                    }
+                }
+                break;
+            case AnimationState.Booster_2:
+                {
+                    if (isOn)
+                    {
+                        charAnim.SafeResetTrigger(playerCharacter.GetString_ANIM_BOOSTER_2());
+                        charAnim.SafeSetTrigger(playerCharacter.GetString_ANIM_BOOSTER_2());
+                    }
+                }
+                break;
+            case AnimationState.Brake:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_BRAKE(), isOn);
+                }
+                break;
+            case AnimationState.MoveLeft:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_LEFT(), isOn);
+                }
+                break;
+            case AnimationState.MoveRight:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_RIGHT(), isOn);
+                }
+                break;
+            case AnimationState.Victory:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_VICTORY(), isOn);
+                }
+                break;
+            case AnimationState.Complete:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_COMPLETE(), isOn);
+                }
+                break;
+            case AnimationState.Retire:
+                {
+                    charAnim.SafeSetBool(playerCharacter.GetString_ANIM_RETIRE(), isOn);
+                }
+                break;
+            case AnimationState.Flip:
+                {
+                    if (isOn)
+                    {
+                        charAnim.SafeResetTrigger(playerCharacter.GetString_ANIM_FLIP());
+                        charAnim.SafeSetTrigger(playerCharacter.GetString_ANIM_FLIP());
+                    }
+                }
+                break;
+            case AnimationState.Spin:
+                {
+                    if (isOn)
+                    {
+                        charAnim.SafeResetTrigger(playerCharacter.GetString_ANIM_SPIN());
+                        charAnim.SafeSetTrigger(playerCharacter.GetString_ANIM_SPIN());
+                    }
+                }
+                break;
+        }
+    }
+
+    #endregion
 }
