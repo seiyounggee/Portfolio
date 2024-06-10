@@ -1,0 +1,160 @@
+﻿component PlayerLink
+{
+    player_ref PlayerRef;
+}
+
+component PlayerRules
+{
+    [ExcludeFromPrototype]  EntityRef SelfEntity;
+
+    [ExcludeFromPrototype]  FP gravity; 
+
+    [ExcludeFromPrototype]  PlayerType playerType;
+    [ExcludeFromPrototype]  int teamID;             //팀 Mode에서 활용중
+
+    [ExcludeFromPrototype]  bool isIdle;
+    [ExcludeFromPrototype]  bool isRunning;
+    [ExcludeFromPrototype]  bool isJumping;
+    [ExcludeFromPrototype]  bool isAttacking;
+    [ExcludeFromPrototype]  bool isSkill;
+    [ExcludeFromPrototype]  bool isDead;
+    [ExcludeFromPrototype]  bool isGrounded;
+
+    [ExcludeFromPrototype]  bool isSkill_Dash; 
+    [ExcludeFromPrototype]  bool isSkill_Invincible; 
+    [ExcludeFromPrototype]  bool isSkill_Shield; 
+
+    [ExcludeFromPrototype]  FP inputAttackCooltimeCounter; //공격버튼 쿨타임 Counter
+    [ExcludeFromPrototype]  FP inputAttackCooltime;        //공격버튼 쿨타임
+
+    [ExcludeFromPrototype]  FP inputJumpCooltimeCounter; //점프버튼 쿨타임 Counter
+    [ExcludeFromPrototype]  FP inputJumpCooltime;        //점프버튼 쿨타임
+
+    [ExcludeFromPrototype]  FP inputSkillCooltimeCounter; //스킬버튼 쿨타임 Counter
+    [ExcludeFromPrototype]  FP inputSkillCooltime;        //스킬버튼 쿨타임
+
+    [ExcludeFromPrototype]  int attackDamage;           //공격 데미지
+    [ExcludeFromPrototype]  FP attackDuration;          //공격지속시간
+    [ExcludeFromPrototype]  FP attackDurationCounter;   //공격지속시간 Counter
+    [ExcludeFromPrototype]  FP attackRange;             //공격범위
+
+    [ExcludeFromPrototype]  FP maxSpeed;                //최대 이동속도  
+
+    [ExcludeFromPrototype]  int jumpCounter;
+    [ExcludeFromPrototype]  int jumpMaxCount;
+    [ExcludeFromPrototype]  FP jumpDuration;   
+    [ExcludeFromPrototype]  FP jumpDurationCounter;
+    [ExcludeFromPrototype]  bool isNearToFloorWhenJump;
+
+    [ExcludeFromPrototype]  int currHealthPoint;
+    [ExcludeFromPrototype]  int maxHealthPoint;
+
+    [ExcludeFromPrototype]  bool isAutoAttack;
+
+    [ExcludeFromPrototype] list<PlayerSkilLaunchTiming> ListOfSkilLaunchlTiming;
+    [ExcludeFromPrototype] list<PlayerSkilRemoveTiming> ListOfSkillRemoveTiming;
+
+    [ExcludeFromPrototype]  PlayerActiveSkill currentActiveSkillType;   //액티브 스킬
+    [ExcludeFromPrototype]  FP activeSkillDuration;  
+    [ExcludeFromPrototype]  FP activeSkillDurationCounter;  
+
+    [ExcludeFromPrototype]  PlayerPassiveSkill currentPassiveSkillType;     //패시브 스킬
+    [ExcludeFromPrototype]  FP passiveSkillDuration;  
+    [ExcludeFromPrototype]  FP passiveSkillDurationCounter;  
+}
+
+component AIPlayerRules
+{
+   [ExcludeFromPrototype]  EntityRef SelfEntity;
+
+   [ExcludeFromPrototype]  AIDifficulty AIDifficulty;
+
+   [ExcludeFromPrototype]  EntityRef FollowTargetEntity;
+
+   [ExcludeFromPrototype]  AIPlayerState aiPlayerState;
+   [ExcludeFromPrototype]  FP stateCooltime;
+   [ExcludeFromPrototype]  FP stateCooltimeCounter;
+
+   [ExcludeFromPrototype]  bool isInputJump;
+   [ExcludeFromPrototype]  FP jumpCooltime;   
+   [ExcludeFromPrototype]  FP jumpCooltimeCounter;
+
+   [ExcludeFromPrototype]  FP doubleJumpCooltime;   
+   [ExcludeFromPrototype]  FP doubleJumpCooltimeCounter;
+   
+   [ExcludeFromPrototype]  bool isInputAttack;
+   [ExcludeFromPrototype]  FP attackCooltime;   
+   [ExcludeFromPrototype]  FP attackCooltimeCounter;
+
+   [ExcludeFromPrototype]  bool isInputSkill;
+   [ExcludeFromPrototype]  FP skillCooltime;   
+   [ExcludeFromPrototype]  FP skillCooltimeCounter;
+
+   [ExcludeFromPrototype] FPVector3 randomPosition;
+
+   [ExcludeFromPrototype] FPVector3 fleeDirection;
+
+   [ExcludeFromPrototype] RNGSession RngSession;
+
+   [ExcludeFromPrototype]  FP raycastStateChangeCooltime;
+   [ExcludeFromPrototype]  FP raycastStateChangeCooltimeCounter;
+
+   [ExcludeFromPrototype] int RankingPoint;
+}
+
+component BallRules
+{
+    [ExcludeFromPrototype] EntityRef SelfEntity;
+
+    [ExcludeFromPrototype] bool isActive;
+
+    [ExcludeFromPrototype] bool isRayCastHit;
+
+    [ExcludeFromPrototype] BallMovementLogic CurrMovementLogic;
+
+    [ExcludeFromPrototype] FP BallSpeed;
+    [ExcludeFromPrototype] FP BallStartSpeed;
+    [ExcludeFromPrototype] FP BallMinSpeed;
+    [ExcludeFromPrototype] FP BallIncreaseSpeed;
+    [ExcludeFromPrototype] FP BallMaxSpeed;
+
+    [ExcludeFromPrototype] FP BallRotationSpeed;
+    [ExcludeFromPrototype] FP BallRotationMinSpeed;
+    [ExcludeFromPrototype] FP BallRotationIncreaseSpeed;
+    [ExcludeFromPrototype] FP BallRotationMaxSpeed;
+
+    [ExcludeFromPrototype] FPVector3 BallForcedDirection;
+    [ExcludeFromPrototype] FP BallForcedDistCounter;
+    [ExcludeFromPrototype] FP BallForcedDist;
+
+    [ExcludeFromPrototype] FPVector3 BallObjstacleAvoidDirection;
+
+    [ExcludeFromPrototype] EntityRef TargetEntity;
+    [ExcludeFromPrototype] EntityRef PreviousEntity;
+    [ExcludeFromPrototype] FPVector3 TargetPosition;
+
+    [ExcludeFromPrototype] FP ErrorCheckTimer;
+    [ExcludeFromPrototype] int ErrorValidTime;
+
+    [ExcludeFromPrototype] bool isNoDamage;
+    [ExcludeFromPrototype] int DefaultAttackDamage;
+
+    [ExcludeFromPrototype] FP BallCollisionCooltime;
+    [ExcludeFromPrototype] FP BallCollisionCooltimeCounter;
+
+    [ExcludeFromPrototype] FP FreezeBallCooltime;
+    [ExcludeFromPrototype] FP FreezeBallCooltimeCounter;
+
+    [ExcludeFromPrototype] FP CurveBallRotationSpeed;
+    [ExcludeFromPrototype] FPVector3 CurveBallForcedDirection;
+    [ExcludeFromPrototype] FP CurveBallForcedDistCounter;
+    [ExcludeFromPrototype] FP CurveBallForcedDist;
+
+    [ExcludeFromPrototype] FPVector3 SkyRocketBallGoingUpPosition;
+    [ExcludeFromPrototype] bool SkyRocketBallGoingUpFinished;
+}
+
+component MapObjectRules
+{
+    MapObjectType ObjectType;
+}

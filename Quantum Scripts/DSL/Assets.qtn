@@ -1,0 +1,7 @@
+﻿asset DynamicCreateObject;
+
+asset GamePlaySettings;
+
+asset InGameDataSettings;
+
+asset CustomMapDataSettings;

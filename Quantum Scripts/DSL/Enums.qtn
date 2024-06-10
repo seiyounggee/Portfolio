@@ -1,0 +1,190 @@
+﻿enum GamePlayState : Byte
+{
+	None = 0,
+	Wait,
+	CountDown,
+	Play,
+	End,
+}
+
+enum InGamePlayMode : Byte
+{
+    SoloMode,       //각 플레이어가 혼자서 모두와 경쟁하는 모드
+    TeamMode,       //팀 대 팀으로 경쟁하는 
+	PracticeMode,   //연습모드
+}
+
+enum PlayerType : Byte
+{
+	None = 0,
+	RealPlayer,
+	AIPlayer,
+}
+
+enum PlayerEvent
+{
+	None = 0,
+	Event_Jump_First,		//첫번째 점프
+	Event_Jump_Second,		//두번째 점프
+	Event_AttackAttempt,	//공격 시도
+	Event_AttackSuccess,	//공격 성공
+	Event_Hit,				//피격
+	Event_Die,				//죽음
+
+	Event_Skill_Register_FastBall,		//FastBall 스킬 발동 등록
+	Event_Skill_Register_CurveBall,		//CurveBall 스킬 발동 등록
+	Event_Skill_Register_SkyRocketBall,	//SkyRocketBall 스킬 발동 등록
+
+	Event_Skill_Active_Dash,			//Dash 스킬 실행
+	Event_Skill_Active_FreezeBall,		//FreezeBall 스킬 실행
+	Event_Skill_Active_FastBall,		//FastBall 스킬 실행
+	Event_Skill_Active_Shield,			//Shield 스킬 실행
+	Event_Skill_Active_TakeBallTarget,	//TakeBallTarget 스킬 실행
+	Event_Skill_Active_BlindZone,		//BlindZone 스킬 실행
+	Event_Skill_Active_ChangeBallTarget,	
+	Event_Skill_Active_CurveBall,
+	Event_Skill_Active_SkyRocketBall,
+
+	Event_Skill_Deactive_Shield,		//Shield 스킬 종료
+
+	Max,
+}
+
+enum BallEvent
+{
+	None,
+
+	Event_ResetMovementLogic,		//공 움직임 로직 초기화
+	Event_Active_FreezeBall,
+	Event_Active_FastBall,
+	Event_Active_CurveBall,
+	Event_Active_SkyRocketBall,
+}
+
+enum PlayerActiveSkill : Byte
+{
+	None = 0,
+	Dash,					//앞으로 대쉬
+	FreezeBall,				//공 얼리기
+	FastBall,				//공 Max Speed로 치기
+	Shield,					//쉴드
+	TakeBallTarget,			//공 Target 가져가기
+	BlindZone,				//Blind 오브젝트(?) 생성
+	ChangeBallTarget,		
+	CurveBall,			//휘는 공
+	SkyRocketBall,		//하늘 위로 솟구치는 공
+
+	//ideas....!
+	//Teleport,
+	//AttackBuff,
+	//DebuffPlayer,
+	//SuperJump,
+	//SpeedBoost,
+	//FreezePlayer,			//다른 플레이어 묶어버리기
+
+	Max,
+}
+
+enum PlayerPassiveSkill : Byte
+{
+	None = 0,
+	IncreaseMaxHp,					//최대 체력 증가
+	IncreaseSpeed,					//이동속도 증가
+	IncreaseAttackDamage,			//공격 데미지 증가
+	
+	//IncreaseJumpStrength,			//점프력 증가
+	//IncreaseAttackRange,			//공격 범위 증가
+	//DecreaseAttackSpeed,			//공격 쿨타임 감소
+	//LuckyDefense,					//일정 확률로 데미지 회피
+
+	Max,
+}
+
+enum PlayerSkilLaunchTiming : Byte //스킬 실행 타이밍
+{
+	None = 0,
+	InputImmediately,		//Input 시
+	Before_AttackSuccess,			//공격 성공 직전 (Target이 나 인 경우)
+	After_AttackSuccess,			//공격 성공 직후 (Target이 나->남으로 바뀐 경우)
+	InsideAttackRange,				//공격 범위에 들어왔을때
+
+	Max,
+}
+
+enum PlayerSkilRemoveTiming : Byte //스킬 제거 타이밍
+{
+	None = 0,
+	After_SkillLaunch,				//Input 시
+	After_AttackSuccess,
+	After_Hit,
+	After_TimeElapsed,
+	After_ShieldSuccess,
+
+	Max,
+}
+
+enum AIPlayerState : Byte
+{
+	None = 0,
+	Idle,
+	Chase,
+	RandomPosition,
+	FleeFromOtherPlayers,
+
+	Max,
+}
+
+enum AIDifficulty : Byte
+{
+	Easy,
+	Normal,
+	Hard,
+	Expert,
+	Pro,
+}
+
+enum BallMovementLogic : Byte
+{
+	Default,
+	FreezeBall,
+	FastBall,
+	CurveBall,
+	SkyRocketBall,
+}
+
+enum GetBallTargetType : Byte
+{
+	None = 0,
+	FirstInList,				//리스트에서 1번째 (Spawn 첫번째로 된 플레이어)
+	Random,						//랜덤 아무나
+	Closest,					//가장 가까운 플레이어
+	ClosestOrRandom,			//일정 거리내에는 가까운 플레이어 나머지는 랜덤
+	ClosestToFront,				//가장 시야각이 좁은 플레이어
+	ClosestPlusClosestToFront,	//일정 거리내에는 가까운 플레이어 + 시야각 좁은 플레이어 둘다 체크
+
+	Max,
+}
+
+enum CheatType : Byte
+{
+	None = 0,
+	KillSelf,
+	InvincibleSelf,
+	AutoAttack,
+	HealHP,
+	BallDamageZero,
+	BallMaxSpeed,
+	AllPlayerHpToOne,
+	KillAllButMe,
+
+	Max,
+}
+
+enum MapObjectType
+{
+	Default,
+	//Floor,		//요거는 Floor가 Mesh Collider 일 경우 Ray 체크가 불가... 그래서 그냥 Static 으로 만들어서 EntityRef.None 체크로 바닥 체크중
+	StaticWall,			//맵 투명벽 경기장 밖으로 벗어나지 않게 하기 위한 장치로 사용중
+	StaticPillar,		//고정된 맵 기둥
+	MovingPillar,		//움직이는 맵 기둥
+}

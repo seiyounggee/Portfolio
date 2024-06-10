@@ -1,0 +1,87 @@
+﻿
+struct PlayerDefaultData
+{
+    int MaxHealthPoint;
+    int AttackDamage;           
+    int AttackRange;            //millimeter 기준 (2.5미터)
+    int AttackDuration;         //millisecond 기준 (0.5초)
+    int MaxSpeed;               //millisecond 기준 (8)
+    int Input_AttackCooltime;   //millisecond 기준 (2초)
+    int Input_JumpCooltime;     //millisecond 기준 (1초)
+    int Input_SkillCooltime;    //millisecond 기준 (10초)
+}
+
+struct BallDefaultData
+{
+    int BallStartSpeed;         //millisecond 기준 (=8) 
+    int BallMinSpeed;           //millisecond 기준 (=5)
+    int BallIncreaseSpeed;      //millisecond 기준 (=0.2)
+    int BallMaxSpeed;           //millisecond 기준 (=100)
+
+    int BallRotationSpeed;          //millisecond 기준 (=5) 
+    int BallRotationMinSpeed;       //millisecond 기준 (=5)
+    int BallRotationIncreaseSpeed;  //millisecond 기준 (=0.2)
+    int BallRotationMaxSpeed;       //millisecond 기준 (=50)
+
+    int DefaultAttackDamage;
+
+    int BallCollisionCooltime;      //millisecond 기준 (=0.2)
+}
+
+struct AIDefaultData
+{
+    PlayerDefaultData PlayerDafaultData;
+    PlayerDefaultData PlayerAdditionalStatsData;
+    int CoolTime_Dash;                      //millisecond 기준
+    int CoolTime_FreezeBall;                //millisecond 기준
+    int CoolTime_FastBall;                  //millisecond 기준
+    int CoolTime_Shield;                    //millisecond 기준
+    int CoolTime_TakeBallTarget;            //millisecond 기준
+    int CoolTime_BlindZone;                 //millisecond 기준
+    int CoolTime_ChangeBallTarget;          //millisecond 기준
+    int CoolTime_CurveBall;                 //millisecond 기준
+    int CoolTime_SkyRocketBall;             //millisecond 기준
+
+
+
+    //array<int>[100] AI_AvailableCharacterSkinIDList;
+    //array<int>[100] AI_AvailableWeaponSkinIDList;
+    //array<int>[100] AI_AvailablePassiveSkillList;
+    //array<int>[100] AI_AvailableActiveSkillList;
+}
+
+
+struct AdditionalReferenceData
+{
+
+}
+
+struct PlayerRankInfoArray
+{
+	array<PlayerRankInfo>[10] PlayerRankInfoArr;
+}
+
+struct PlayerRankInfo
+{
+	EntityRef player;
+	int rank_solo;
+    int rank_team;
+}
+
+struct InGamePlayStatisticsArray
+{
+    array<InGamePlayStatisticsData>[10] InGamePlayStatisticsDataArr;
+}
+
+struct InGamePlayStatisticsData
+{
+    EntityRef player;
+    byte activeSkillType;
+    byte passiveSkillType;
+    int mapID;
+    int matchPlayMode;
+    int attackSuccessCount;
+    short killCount;
+    short dieCount;
+    int skillActivationCount;
+}

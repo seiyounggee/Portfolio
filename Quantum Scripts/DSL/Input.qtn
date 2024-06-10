@@ -1,0 +1,11 @@
+﻿input
+{
+    bool Jump;
+    bool Attack;
+    bool Skill;
+
+    FP horizontal;
+    FP vertical;
+
+    FPVector3 cameraDirection;
+}

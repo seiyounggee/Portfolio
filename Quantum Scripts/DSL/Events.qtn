@@ -1,0 +1,53 @@
+﻿synced event GamePlayStateChanged
+{
+	GamePlayState	StateType;
+}
+
+synced event PlayerEvents
+{
+	EntityRef		Entity;
+	PlayerEvent PlayerEvent;
+}
+
+synced event PlayerSpawned
+{
+	EntityRef		Entity;
+	String PID;
+	bool isAI;
+	int teamID;
+	int characterSkinID;
+	int weaponSkinID;
+
+	String nickname;
+	int rankingPoint;
+}
+
+synced event BallEvents
+{
+	EntityRef	Entity;
+	BallEvent BallEvent;
+}
+
+synced event BallSpawned
+{
+	EntityRef		Entity;
+}
+
+synced event BallTargetChanged
+{
+	EntityRef		TargetEntity;
+	EntityRef		PrevEntity;
+}
+
+synced event GameResult
+{
+	InGamePlayMode		PlayMode;
+	PlayerRankInfoArray PlayerRankInfoArray;
+	InGamePlayStatisticsArray InGamePlayStatisticsArray;
+}
+
+synced event UpdatePlayerRank
+{
+	InGamePlayMode		PlayMode;
+	PlayerRankInfoArray PlayerRankInfoArray;
+}

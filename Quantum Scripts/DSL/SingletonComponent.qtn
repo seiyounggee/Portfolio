@@ -1,0 +1,36 @@
+﻿singleton component GameManager
+{
+	 InGamePlayMode CurrentInGamePlayMode;
+
+     PlayerRef defaultPlayerRef;
+
+	 int totalPlayers;						// total = real + ai
+	 int realPlayers;
+	 int aiPlayers;
+
+	 int totalTeamCount;
+
+	 FP CountDownTime;
+	 FP InGameTime;							/* 인게임 토탈 플레이시간 */
+	 list<EntityRef> ListOfPlayers_All;			/* 플레이어 List */
+	 list<EntityRef> ListOfPlayers_Real;		
+	 list<EntityRef> ListOfPlayers_AI;		
+	 EntityRef ball;
+	 list<EntityRef> ListOfMapObject;	
+
+
+	 bool isAIPlayerSpawned;				/* AI 플레이어 소환 여부 */
+	 bool isEveryPlayerSpawned;				/* 모든 플레이어 소환 여부 */
+	 bool isBallSpawned;					/* 공 소환 여부 */
+
+	 int alivePlayerCount;
+	 int curr_aliveTeamCount;
+	 int previous_aliveTeamCount;
+
+	 list<PlayerRankInfo> ListOfPlayers_SoloRanking;
+	 list<PlayerRankInfo> ListOfPlayers_TeamRanking;
+
+	 list<InGamePlayStatisticsData> ListOfPlayers_Statistics;
+
+	 RNGSession RngSession;
+}
